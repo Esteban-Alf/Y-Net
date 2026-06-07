@@ -8983,6 +8983,7 @@ if (!window.__YNET_CLOUD) { initApp(); }
       <div id="auth-login" style="display:none;">
         <div class="field" style="margin-bottom:12px;"><label style="font-size:12px;color:#475569;font-weight:600;">Email</label><input type="email" id="auth-email" placeholder="tu@email.com" style="width:100%;padding:11px;border:2px solid #e2e8f0;border-radius:10px;box-sizing:border-box;font-size:14px;"></div>
         <div class="field" style="margin-bottom:8px;"><label style="font-size:12px;color:#475569;font-weight:600;">Contraseña</label><input type="password" id="auth-pass" placeholder="••••••••" style="width:100%;padding:11px;border:2px solid #e2e8f0;border-radius:10px;box-sizing:border-box;font-size:14px;" onkeydown="if(event.key==='Enter')window.__ynetDoLogin()"></div>
+        <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:#475569;cursor:pointer;margin-bottom:8px;"><input type="checkbox" id="auth-remember" checked style="width:15px;height:15px;cursor:pointer;"> Mantener sesión iniciada</label>
         <div id="auth-error" style="color:#dc2626;font-size:12px;text-align:center;min-height:16px;margin-bottom:8px;"></div>
         <button onclick="window.__ynetDoLogin()" style="width:100%;padding:13px;border:none;background:#E60012;color:#fff;border-radius:10px;cursor:pointer;font-size:15px;font-weight:600;">Ingresar</button>
         <div style="text-align:center;margin-top:12px;"><a href="javascript:void(0)" onclick="window.__ynetForgot()" style="font-size:12.5px;color:#E60012;text-decoration:none;font-weight:600;">¿Olvidaste tu contraseña?</a></div>
@@ -9015,6 +9016,7 @@ if (!window.__YNET_CLOUD) { initApp(); }
   const SUPABASE_URL = 'https://oauqnaierstivlotfnfu.supabase.co';
   const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_vOscmriFYLkMsbf9PAFNlQ_-Jnh1zVd';
   const REDIRECT_URL = 'https://y-net.vercel.app/';
+  const ADMIN_EMAIL = 'ctagral24@gmail.com'; // este mail siempre entra como administrador
   // -------------------------------------------------
 
   window.__YNET_CLOUD = true;
@@ -9029,7 +9031,17 @@ if (!window.__YNET_CLOUD) { initApp(); }
     showAuth(); show('auth-login'); $('auth-error').textContent = 'No se pudo cargar Supabase. Revisá tu conexión.';
     return;
   }
-  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+  // "Mantener sesión iniciada": si está activo, la sesión vive en localStorage
+  // (persiste al cerrar el navegador). Si no, en sessionStorage (se borra al cerrar).
+  function keepSession(){ return localStorage.getItem('ynet_keep_session') !== '0'; }
+  const sessionStore = {
+    getItem: function(k){ return keepSession() ? localStorage.getItem(k) : (sessionStorage.getItem(k) || localStorage.getItem(k)); },
+    setItem: function(k, v){ if (keepSession()) { localStorage.setItem(k, v); } else { sessionStorage.setItem(k, v); } },
+    removeItem: function(k){ try{ localStorage.removeItem(k); }catch(e){} try{ sessionStorage.removeItem(k); }catch(e){} }
+  };
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: { storage: sessionStore, persistSession: true, autoRefreshToken: true }
+  });
   window.__sb = sb;
 
   // ---- Espejo de datos: localStorage <-> Supabase (tabla app_data) ----
@@ -9073,6 +9085,20 @@ if (!window.__YNET_CLOUD) { initApp(); }
       localStorage.setItem('gg_users_v1', JSON.stringify(usersArr)); // sube a la nube
     }
     const ae = (authEmail||'').toLowerCase();
+    // Garantizar que el mail admin configurado siempre tenga acceso de administrador
+    if (ae === ADMIN_EMAIL.toLowerCase()) {
+      let adm = usersArr.find(u => (u.email||'').toLowerCase().split(/[;,]/).map(s=>s.trim()).indexOf(ae) !== -1);
+      if (!adm) {
+        let ze = usersArr.some(u => (u.ze||'') === 'ADMIN') ? ('ADMIN-' + Date.now().toString().slice(-4)) : 'ADMIN';
+        adm = { ze:ze, firstname:'Admin', lastname:'Administrador', dept:'Sistemas', cargo:'Administrador', email:authEmail, phone:'', team:[], pin:'', areas:['admin'], active:true, createdAt:new Date().toISOString() };
+        usersArr.push(adm);
+      } else {
+        adm.areas = Array.isArray(adm.areas) ? adm.areas : [];
+        if (adm.areas.indexOf('admin') === -1) adm.areas.push('admin');
+        adm.active = true;
+      }
+      localStorage.setItem('gg_users_v1', JSON.stringify(usersArr)); // sube a la nube
+    }
     const me = usersArr.find(u => (u.email||'').toLowerCase().split(/[;,]/).map(s=>s.trim()).indexOf(ae) !== -1);
     if (!me) { showAuth(); show('auth-noprofile'); $('auth-noprofile-email').textContent = authEmail; return; }
     if (me.active === false) { showAuth(); show('auth-login'); $('auth-error').textContent = 'Tu usuario está inactivo. Contactá al administrador.'; return; }
@@ -9094,6 +9120,9 @@ if (!window.__YNET_CLOUD) { initApp(); }
     const pass = $('auth-pass').value;
     $('auth-error').textContent = '';
     if (!email || !pass) { $('auth-error').textContent = 'Completá email y contraseña.'; return; }
+    // Guardar preferencia de "mantener sesión" antes de iniciar (define dónde se guarda la sesión)
+    const rememberEl = $('auth-remember');
+    localStorage.setItem('ynet_keep_session', (rememberEl && !rememberEl.checked) ? '0' : '1');
     const { data, error } = await sb.auth.signInWithPassword({ email: email, password: pass });
     if (error) { $('auth-error').textContent = 'Email o contraseña incorrectos.'; return; }
     show('auth-loading');
