@@ -291,7 +291,6 @@ textarea{resize:vertical;min-height:60px;}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 <!-- LOGIN SCREEN -->
@@ -332,6 +331,11 @@ textarea{resize:vertical;min-height:60px;}
           <button onclick="cancelAreaPick()" style="width:100%;padding:10px;margin-top:10px;border:1px solid #e2e8f0;background:#fff;border-radius:10px;cursor:pointer;font-size:13px;color:#64748b;">← Volver</button>
         </div>
       </div>
+    </div>
+    <div style="border-top:1px solid #f1f5f9;padding:12px 32px;display:flex;justify-content:center;gap:18px;background:#fafafa;">
+      <a href="javascript:void(0)" onclick="ynetImportTrigger()" style="font-size:11.5px;color:#64748b;text-decoration:none;">Importar datos</a>
+      <a href="javascript:void(0)" onclick="ynetExportData()" style="font-size:11.5px;color:#64748b;text-decoration:none;">Exportar datos</a>
+      <input type="file" id="ynet-import-file" accept="application/json,.json" style="display:none;" onchange="ynetImportData(this)">
     </div>
   </div>
 </div>
@@ -1372,7 +1376,7 @@ textarea{resize:vertical;min-height:60px;}
 
 </div>
 
-<script type="text/plain" id="ynet-app-code">
+<script>
 // ============ DATA ============
 
 // ──── Provincias y localidades ARG / UY ────
@@ -1792,8 +1796,43 @@ function logout() {
   localStorage.removeItem('gg_current_user_ze');
   currentRole = null;
   currentUser = null;
-  if (window.__ynetSignOut) { window.__ynetSignOut(); return; }
   showLoginScreen();
+}
+
+// ──── Respaldo de datos (exportar / importar localStorage) ────
+function ynetExportData() {
+  const d = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.indexOf('gg_') === 0) d[k] = localStorage.getItem(k);
+  }
+  if (!Object.keys(d).length) { alert('No hay datos para exportar en este navegador / esta dirección. Asegurate de abrir la app donde tenés la información cargada.'); return; }
+  const blob = new Blob([JSON.stringify(d)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'y-net-respaldo-' + new Date().toISOString().slice(0, 10) + '.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+function ynetImportTrigger() { document.getElementById('ynet-import-file').click(); }
+function ynetImportData(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function () {
+    let data;
+    try { data = JSON.parse(reader.result); }
+    catch (e) { alert('No se pudo leer el archivo. ¿Es el .json que exportaste desde Y-Net?'); input.value = ''; return; }
+    if (!data || typeof data !== 'object') { alert('El archivo no tiene el formato esperado.'); input.value = ''; return; }
+    const SKIP = ['gg_current_user_ze', 'gg_current_role'];
+    let n = 0;
+    Object.keys(data).forEach(function (k) {
+      if (k.indexOf('gg_') === 0 && SKIP.indexOf(k) === -1) { localStorage.setItem(k, data[k]); n++; }
+    });
+    if (!n) { alert('El archivo no contenía datos de Y-Net.'); input.value = ''; return; }
+    alert('Listo: se importaron ' + n + ' registros. La página se va a recargar para aplicar los datos.');
+    location.reload();
+  };
+  reader.readAsText(file);
 }
 
 function migrateBaseDataToGarantias() {
@@ -8637,9 +8676,7 @@ function saveUser() {
   const firstname = document.getElementById('um-firstname').value.trim();
   const lastname = document.getElementById('um-lastname').value.trim();
   const pin = document.getElementById('um-pin').value.trim();
-  const email = document.getElementById('um-email').value.trim();
-  if (!ze || !firstname || !lastname) { alert('Nombre, Apellido y ZE son obligatorios'); return; }
-  if (!email) { alert('El email es obligatorio: tiene que coincidir con el de la invitación en Supabase, porque es lo que vincula al usuario con su acceso.'); return; }
+  if (!ze || !firstname || !lastname || !pin) { alert('Nombre, Apellido, ZE y PIN son obligatorios'); return; }
   const areas = Array.from(document.querySelectorAll('#um-areas input:checked')).map(el => el.value);
   if (areas.length === 0) { alert('Asigná al menos un área'); return; }
   const hasTeam = document.getElementById('um-has-team').value === 'si';
@@ -8964,205 +9001,8 @@ function initApp() {
     checkComunicadosForRole();
   }
 }
-// Cloud mode: el arranque lo controla el bootstrap (autenticación + hidratación).
-// En modo local (sin Supabase) arranca solo como antes.
-if (!window.__YNET_CLOUD) { initApp(); }
+initApp();
 </script>
 
-<!-- ================= AUTH OVERLAY (Supabase) ================= -->
-<div id="auth-screen" style="display:none;position:fixed;inset:0;z-index:2000;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);align-items:center;justify-content:center;padding:20px;overflow-y:auto;">
-  <div style="background:#fff;border-radius:20px;max-width:420px;width:100%;box-shadow:0 25px 70px rgba(0,0,0,0.5);overflow:hidden;">
-    <div style="padding:40px 32px 8px;text-align:center;">
-      <img id="auth-logo" src="" alt="Y-Net" style="max-width:300px;width:100%;margin:0 auto;display:block;">
-    </div>
-    <div style="padding:16px 32px 32px;">
-      <!-- Estado: cargando -->
-      <div id="auth-loading" style="text-align:center;color:#94a3b8;font-size:13px;padding:20px;">Conectando…</div>
-
-      <!-- Estado: login -->
-      <div id="auth-login" style="display:none;">
-        <div class="field" style="margin-bottom:12px;"><label style="font-size:12px;color:#475569;font-weight:600;">Email</label><input type="email" id="auth-email" placeholder="tu@email.com" style="width:100%;padding:11px;border:2px solid #e2e8f0;border-radius:10px;box-sizing:border-box;font-size:14px;"></div>
-        <div class="field" style="margin-bottom:8px;"><label style="font-size:12px;color:#475569;font-weight:600;">Contraseña</label><input type="password" id="auth-pass" placeholder="••••••••" style="width:100%;padding:11px;border:2px solid #e2e8f0;border-radius:10px;box-sizing:border-box;font-size:14px;" onkeydown="if(event.key==='Enter')window.__ynetDoLogin()"></div>
-        <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:#475569;cursor:pointer;margin-bottom:8px;"><input type="checkbox" id="auth-remember" checked style="width:15px;height:15px;cursor:pointer;"> Mantener sesión iniciada</label>
-        <div id="auth-error" style="color:#dc2626;font-size:12px;text-align:center;min-height:16px;margin-bottom:8px;"></div>
-        <button onclick="window.__ynetDoLogin()" style="width:100%;padding:13px;border:none;background:#E60012;color:#fff;border-radius:10px;cursor:pointer;font-size:15px;font-weight:600;">Ingresar</button>
-        <div style="text-align:center;margin-top:12px;"><a href="javascript:void(0)" onclick="window.__ynetForgot()" style="font-size:12.5px;color:#E60012;text-decoration:none;font-weight:600;">¿Olvidaste tu contraseña?</a></div>
-      </div>
-
-      <!-- Estado: definir nueva contraseña (reset / invitación) -->
-      <div id="auth-setpass" style="display:none;">
-        <div style="font-size:13px;font-weight:700;color:#334155;margin-bottom:4px;text-align:center;">Definí tu contraseña</div>
-        <div style="font-size:11.5px;color:#94a3b8;margin-bottom:14px;text-align:center;line-height:1.4;">Elegí una contraseña nueva para tu cuenta.</div>
-        <div class="field" style="margin-bottom:10px;"><label style="font-size:12px;color:#475569;font-weight:600;">Nueva contraseña</label><input type="password" id="auth-new1" placeholder="Mínimo 6 caracteres" style="width:100%;padding:11px;border:2px solid #e2e8f0;border-radius:10px;box-sizing:border-box;font-size:14px;"></div>
-        <div class="field" style="margin-bottom:8px;"><label style="font-size:12px;color:#475569;font-weight:600;">Repetir contraseña</label><input type="password" id="auth-new2" placeholder="Repetir" style="width:100%;padding:11px;border:2px solid #e2e8f0;border-radius:10px;box-sizing:border-box;font-size:14px;" onkeydown="if(event.key==='Enter')window.__ynetSetPass()"></div>
-        <div id="auth-sp-error" style="color:#dc2626;font-size:12px;text-align:center;min-height:16px;margin-bottom:8px;"></div>
-        <button onclick="window.__ynetSetPass()" style="width:100%;padding:13px;border:none;background:#E60012;color:#fff;border-radius:10px;cursor:pointer;font-size:15px;font-weight:600;">Guardar contraseña</button>
-      </div>
-
-      <!-- Estado: autenticado pero sin perfil -->
-      <div id="auth-noprofile" style="display:none;text-align:center;">
-        <div style="font-size:13px;color:#334155;line-height:1.5;margin-bottom:14px;">Tu cuenta está activa pero todavía no tiene un perfil cargado en Y-Net.<br>Pedile al administrador que cree tu usuario con este email:</div>
-        <div id="auth-noprofile-email" style="font-weight:700;color:#E60012;margin-bottom:16px;word-break:break-all;"></div>
-        <button onclick="window.__ynetSignOut()" style="width:100%;padding:11px;border:1px solid #e2e8f0;background:#fff;border-radius:10px;cursor:pointer;font-size:13px;color:#64748b;">Cerrar sesión</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ================= BOOTSTRAP (Supabase) ================= -->
-<script>
-(function(){
-  // ---- CONFIG: pegá acá tus datos de Supabase ----
-  const SUPABASE_URL = 'https://oauqnaierstivlotfnfu.supabase.co';
-  const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_vOscmriFYLkMsbf9PAFNlQ_-Jnh1zVd';
-  const REDIRECT_URL = 'https://y-net.vercel.app/';
-  const ADMIN_EMAIL = 'ctagral24@gmail.com'; // este mail siempre entra como administrador
-  // -------------------------------------------------
-
-  window.__YNET_CLOUD = true;
-  const _initialHash = window.location.hash || '';
-  const $ = id => document.getElementById(id);
-  function show(state){ ['auth-loading','auth-login','auth-setpass','auth-noprofile'].forEach(s => { const el=$(s); if(el) el.style.display = (s===state)?'block':'none'; }); }
-  function showAuth(){ const a=$('auth-screen'); if(a) a.style.display='flex'; }
-  // Reusar el logo embebido del sidebar
-  try { const l = document.querySelector('.sb-logo img'); if (l && $('auth-logo')) $('auth-logo').src = l.src; } catch(e){}
-
-  if (!window.supabase || !window.supabase.createClient) {
-    showAuth(); show('auth-login'); $('auth-error').textContent = 'No se pudo cargar Supabase. Revisá tu conexión.';
-    return;
-  }
-  // "Mantener sesión iniciada": si está activo, la sesión vive en localStorage
-  // (persiste al cerrar el navegador). Si no, en sessionStorage (se borra al cerrar).
-  function keepSession(){ return localStorage.getItem('ynet_keep_session') !== '0'; }
-  const sessionStore = {
-    getItem: function(k){ return keepSession() ? localStorage.getItem(k) : (sessionStorage.getItem(k) || localStorage.getItem(k)); },
-    setItem: function(k, v){ if (keepSession()) { localStorage.setItem(k, v); } else { sessionStorage.setItem(k, v); } },
-    removeItem: function(k){ try{ localStorage.removeItem(k); }catch(e){} try{ sessionStorage.removeItem(k); }catch(e){} }
-  };
-  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    auth: { storage: sessionStore, persistSession: true, autoRefreshToken: true }
-  });
-  window.__sb = sb;
-
-  // ---- Espejo de datos: localStorage <-> Supabase (tabla app_data) ----
-  const _origSet = localStorage.setItem.bind(localStorage);
-  const _origRemove = localStorage.removeItem.bind(localStorage);
-  const SESSION_KEYS = ['gg_current_user_ze','gg_current_role','gg_remember_ze'];
-  function isSharedKey(k){ return k && k.indexOf('gg_') === 0 && SESSION_KEYS.indexOf(k) === -1; }
-  // Interceptar escrituras de la app para subirlas a la nube
-  localStorage.setItem = function(k, v){ _origSet(k, v); if (isSharedKey(k)) cloudUpsert(k, v); };
-  localStorage.removeItem = function(k){ _origRemove(k); if (isSharedKey(k)) cloudDelete(k); };
-  let _q = Promise.resolve();
-  function cloudUpsert(k, v){ _q = _q.then(() => sb.from('app_data').upsert({ k:k, v:v, updated_at:new Date().toISOString() }, { onConflict:'k' }).then(r => { if(r.error) console.warn('upsert', k, r.error.message); }, e => console.warn('upsert', e))); }
-  function cloudDelete(k){ _q = _q.then(() => sb.from('app_data').delete().eq('k', k).then(()=>{}, e => console.warn('del', e))); }
-
-  async function hydrate(){
-    const { data, error } = await sb.from('app_data').select('k,v');
-    if (error) { console.warn('hydrate', error.message); return false; }
-    (data||[]).forEach(row => { if (isSharedKey(row.k)) _origSet(row.k, row.v); });
-    return true;
-  }
-
-  // ---- Inyectar la app (que estaba como text/plain) ----
-  let _appInjected = false;
-  function injectApp(){
-    if (_appInjected) return; _appInjected = true;
-    const code = $('ynet-app-code').textContent;
-    const s = document.createElement('script');
-    s.textContent = code;
-    document.body.appendChild(s);
-  }
-
-  // ---- Determinar perfil y entrar ----
-  async function enterApp(authEmail){
-    const okHydrate = await hydrate();
-    if (!okHydrate) { showAuth(); show('auth-login'); $('auth-error').textContent = 'No se pudo leer la base. ¿Corriste el SQL de la tabla app_data?'; return; }
-    let usersArr = null;
-    try { usersArr = JSON.parse(localStorage.getItem('gg_users_v1') || 'null'); } catch(e){}
-    // Primer arranque: si no hay usuarios, el primero que entra queda como admin
-    if (!usersArr || !usersArr.length) {
-      usersArr = [{ ze:'ADMIN', firstname:'Admin', lastname:'Administrador', dept:'Sistemas', cargo:'Administrador', email:authEmail, phone:'', team:[], pin:'', areas:['admin'], active:true, createdAt:new Date().toISOString() }];
-      localStorage.setItem('gg_users_v1', JSON.stringify(usersArr)); // sube a la nube
-    }
-    const ae = (authEmail||'').toLowerCase();
-    // Garantizar que el mail admin configurado siempre tenga acceso de administrador
-    if (ae === ADMIN_EMAIL.toLowerCase()) {
-      let adm = usersArr.find(u => (u.email||'').toLowerCase().split(/[;,]/).map(s=>s.trim()).indexOf(ae) !== -1);
-      if (!adm) {
-        let ze = usersArr.some(u => (u.ze||'') === 'ADMIN') ? ('ADMIN-' + Date.now().toString().slice(-4)) : 'ADMIN';
-        adm = { ze:ze, firstname:'Admin', lastname:'Administrador', dept:'Sistemas', cargo:'Administrador', email:authEmail, phone:'', team:[], pin:'', areas:['admin'], active:true, createdAt:new Date().toISOString() };
-        usersArr.push(adm);
-      } else {
-        adm.areas = Array.isArray(adm.areas) ? adm.areas : [];
-        if (adm.areas.indexOf('admin') === -1) adm.areas.push('admin');
-        adm.active = true;
-      }
-      localStorage.setItem('gg_users_v1', JSON.stringify(usersArr)); // sube a la nube
-    }
-    const me = usersArr.find(u => (u.email||'').toLowerCase().split(/[;,]/).map(s=>s.trim()).indexOf(ae) !== -1);
-    if (!me) { showAuth(); show('auth-noprofile'); $('auth-noprofile-email').textContent = authEmail; return; }
-    if (me.active === false) { showAuth(); show('auth-login'); $('auth-error').textContent = 'Tu usuario está inactivo. Contactá al administrador.'; return; }
-    const areaKey = (me.areas && me.areas[0]) || 'admin';
-    // Inyectar la app y completar el login con sus propias funciones
-    injectApp();
-    setTimeout(function(){
-      try {
-        const appUser = (typeof findUserByZE === 'function' && findUserByZE(me.ze)) || me;
-        $('auth-screen').style.display = 'none';
-        completeLogin(appUser, areaKey);
-      } catch(e){ console.error('boot completeLogin', e); $('auth-screen').style.display='none'; }
-    }, 60);
-  }
-
-  // ---- Acciones de UI ----
-  window.__ynetDoLogin = async function(){
-    const email = $('auth-email').value.trim();
-    const pass = $('auth-pass').value;
-    $('auth-error').textContent = '';
-    if (!email || !pass) { $('auth-error').textContent = 'Completá email y contraseña.'; return; }
-    // Guardar preferencia de "mantener sesión" antes de iniciar (define dónde se guarda la sesión)
-    const rememberEl = $('auth-remember');
-    localStorage.setItem('ynet_keep_session', (rememberEl && !rememberEl.checked) ? '0' : '1');
-    const { data, error } = await sb.auth.signInWithPassword({ email: email, password: pass });
-    if (error) { $('auth-error').textContent = 'Email o contraseña incorrectos.'; return; }
-    show('auth-loading');
-    enterApp(data.user.email);
-  };
-  window.__ynetForgot = async function(){
-    const email = $('auth-email').value.trim();
-    if (!email) { $('auth-error').textContent = 'Escribí tu email arriba y volvé a tocar el link.'; return; }
-    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: REDIRECT_URL });
-    if (error) { $('auth-error').textContent = 'No se pudo enviar el mail: ' + error.message; return; }
-    $('auth-error').style.color = '#16a34a';
-    $('auth-error').textContent = 'Te enviamos un mail con el link para cambiar la contraseña.';
-  };
-  window.__ynetSetPass = async function(){
-    const p1 = $('auth-new1').value, p2 = $('auth-new2').value;
-    $('auth-sp-error').textContent = '';
-    if (!p1 || p1.length < 6) { $('auth-sp-error').textContent = 'Mínimo 6 caracteres.'; return; }
-    if (p1 !== p2) { $('auth-sp-error').textContent = 'Las contraseñas no coinciden.'; return; }
-    const { error } = await sb.auth.updateUser({ password: p1 });
-    if (error) { $('auth-sp-error').textContent = error.message; return; }
-    alert('Contraseña guardada. Ya podés ingresar.');
-    try { history.replaceState(null, '', location.pathname); } catch(e){}
-    location.reload();
-  };
-  window.__ynetSignOut = async function(){ try { await sb.auth.signOut(); } catch(e){} location.replace(REDIRECT_URL); };
-
-  // ---- Flujo inicial ----
-  let _recovery = false;
-  sb.auth.onAuthStateChange(function(event){ if (event === 'PASSWORD_RECOVERY') { _recovery = true; showAuth(); show('auth-setpass'); } });
-
-  (async function start(){
-    showAuth(); show('auth-loading');
-    const isRecovery = _initialHash.indexOf('type=recovery') !== -1 || _initialHash.indexOf('type=invite') !== -1;
-    if (isRecovery) { show('auth-setpass'); return; }
-    const { data } = await sb.auth.getSession();
-    if (_recovery) { show('auth-setpass'); return; }
-    if (data && data.session) { show('auth-loading'); enterApp(data.session.user.email); }
-    else { show('auth-login'); setTimeout(()=>{ const e=$('auth-email'); if(e) e.focus(); }, 50); }
-  })();
-})();
-</script>
 </body>
 </html>
