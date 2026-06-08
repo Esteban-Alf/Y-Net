@@ -591,7 +591,8 @@ textarea{resize:vertical;min-height:60px;}
 
   <!-- ADMIN: ÁREAS Y MÓDULOS -->
   <div class="page" id="page-areas">
-    <div class="ph"><div><div class="ph-title">Áreas y módulos</div><div class="ph-sub">Creá áreas y definí qué módulos ve cada una</div></div><div class="ph-actions"><button class="btn btn-ghost" onclick="openPinSettings()">PINs de acceso</button><button class="btn btn-primary" onclick="openAreaModal()">+ Nueva área</button></div></div>
+    <div class="ph"><div><div class="ph-title">Áreas y módulos</div><div class="ph-sub">Creá áreas y definí qué módulos ve cada una</div></div><div class="ph-actions"><button class="btn btn-ghost" onclick="window.ynetImportTrigger()">Importar datos</button><button class="btn btn-ghost" onclick="window.ynetExportData()">Exportar datos</button><button class="btn btn-ghost" onclick="openPinSettings()">PINs de acceso</button><button class="btn btn-primary" onclick="openAreaModal()">+ Nueva área</button></div></div>
+    <input type="file" id="ynet-import-file" accept="application/json,.json" style="display:none;" onchange="window.ynetImportData(this)">
     <div class="content"><div id="areas-container"></div></div>
   </div>
 
@@ -8987,6 +8988,7 @@ if (!window.__YNET_CLOUD) { initApp(); }
         <div id="auth-error" style="color:#dc2626;font-size:12px;text-align:center;min-height:16px;margin-bottom:8px;"></div>
         <button onclick="window.__ynetDoLogin()" style="width:100%;padding:13px;border:none;background:#E60012;color:#fff;border-radius:10px;cursor:pointer;font-size:15px;font-weight:600;">Ingresar</button>
         <div style="text-align:center;margin-top:12px;"><a href="javascript:void(0)" onclick="window.__ynetForgot()" style="font-size:12.5px;color:#E60012;text-decoration:none;font-weight:600;">¿Olvidaste tu contraseña?</a></div>
+        <div style="text-align:center;margin-top:14px;border-top:1px solid #f1f5f9;padding-top:12px;"><a href="javascript:void(0)" onclick="window.ynetExportData()" style="font-size:11px;color:#94a3b8;text-decoration:none;">Exportar datos de este navegador (respaldo)</a></div>
       </div>
 
       <!-- Estado: definir nueva contraseña (reset / invitación) -->
@@ -9148,6 +9150,36 @@ if (!window.__YNET_CLOUD) { initApp(); }
     location.reload();
   };
   window.__ynetSignOut = async function(){ try { await sb.auth.signOut(); } catch(e){} location.replace(REDIRECT_URL); };
+
+  // ---- Respaldo / migración de datos ----
+  window.ynetExportData = function(){
+    const d = {};
+    for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k && k.indexOf('gg_') === 0) d[k] = localStorage.getItem(k); }
+    if (!Object.keys(d).length){ alert('No hay datos para exportar en este navegador / esta dirección. Asegurate de abrir la app donde tenés la información cargada.'); return; }
+    const blob = new Blob([JSON.stringify(d)], { type:'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = 'y-net-respaldo-' + new Date().toISOString().slice(0,10) + '.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  };
+  window.ynetImportTrigger = function(){ const el = document.getElementById('ynet-import-file'); if (el) el.click(); };
+  window.ynetImportData = function(input){
+    const file = input.files && input.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async function(){
+      let data; try { data = JSON.parse(reader.result); } catch(e){ alert('No se pudo leer el archivo. ¿Es el .json que exportaste desde Y-Net?'); input.value=''; return; }
+      if (!data || typeof data !== 'object'){ alert('El archivo no tiene el formato esperado.'); input.value=''; return; }
+      let authed = false; try { const s = await sb.auth.getSession(); authed = !!(s && s.data && s.data.session); } catch(e){}
+      if (!authed){ alert('Para importar y subir los datos a la nube tenés que iniciar sesión primero.'); input.value=''; return; }
+      const SKIP = ['gg_current_user_ze','gg_current_role'];
+      let n = 0;
+      Object.keys(data).forEach(function(k){ if (k.indexOf('gg_') === 0 && SKIP.indexOf(k) === -1){ localStorage.setItem(k, data[k]); n++; } }); // wrapped → sube a la nube
+      if (!n){ alert('El archivo no contenía datos de Y-Net.'); input.value=''; return; }
+      try { await _q; } catch(e){} // esperar a que termine de subir todo a Supabase
+      alert('Listo: se importaron ' + n + ' registros y se subieron a la nube. La página se va a recargar.');
+      location.reload();
+    };
+    reader.readAsText(file);
+  };
 
   // ---- Flujo inicial ----
   let _recovery = false;
