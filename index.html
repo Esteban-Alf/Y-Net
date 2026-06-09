@@ -518,7 +518,7 @@ textarea{resize:vertical;min-height:60px;}
   <div class="page" id="page-recall">
     <div class="ph">
       <div><div class="ph-title">Recall</div><div class="ph-sub">Campañas activas y avance</div></div>
-      <div class="ph-actions"><button class="btn btn-primary" onclick="openRecallModal()">+ Nueva campaña</button></div>
+      <div class="ph-actions"><button class="btn btn-ghost" onclick="openNetworkMail()">✉ Enviar comunicado a la red</button><button class="btn btn-primary" onclick="openRecallModal()">+ Nueva campaña</button></div>
     </div>
     <div class="content">
       <div id="recall-container"></div>
@@ -702,6 +702,23 @@ textarea{resize:vertical;min-height:60px;}
       <button class="btn btn-ghost" id="rc-delete-btn" style="display:none;color:var(--primary);" onclick="deleteRecall()">Eliminar</button>
       <button class="btn btn-ghost" onclick="closeModal('modal-recall')">Cancelar</button>
       <button class="btn btn-primary" onclick="saveRecall()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- COMUNICADO A LA RED MODAL -->
+<div class="modal-bg" id="modal-network-mail">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-h"><div class="modal-title">Enviar comunicado a la red</div><button class="modal-close" onclick="closeModal('modal-network-mail')">×</button></div>
+    <div id="nm-summary" style="font-size:12.5px;color:var(--text-secondary);background:var(--bg-page);padding:10px 12px;border-radius:8px;margin-bottom:14px;">—</div>
+    <div class="field" style="margin-bottom:10px;"><label>Asunto (opcional)</label><input type="text" id="nm-subject" placeholder="Ej: Comunicado a la red de concesionarios"></div>
+    <div class="field" style="margin-bottom:10px;"><label>Mensaje (opcional)</label><textarea id="nm-body" rows="4" placeholder="Texto del comunicado…"></textarea></div>
+    <div class="field" style="margin-bottom:6px;"><label>Direcciones (CCO) — podés copiarlas desde acá</label><textarea id="nm-emails" rows="4" readonly style="font-size:11.5px;color:#475569;background:#fafafa;" onclick="this.select()"></textarea></div>
+    <div style="font-size:11px;color:var(--text-muted);line-height:1.45;margin-bottom:12px;">Para proteger la privacidad, todas van en <b>CCO</b> (copia oculta): ningún concesionario ve los mails de los demás. La app no envía el correo: prepara los destinatarios y abre tu programa de correo para que lo envíes vos.</div>
+    <div class="modal-actions">
+      <div style="flex:1;"></div>
+      <button class="btn btn-ghost" onclick="networkMailMailto()">Abrir en mi correo</button>
+      <button class="btn btn-primary" onclick="networkMailCopy()">Copiar direcciones</button>
     </div>
   </div>
 </div>
@@ -5184,6 +5201,64 @@ function exportRecallAllDealers(recallId) {
   XLSX.utils.book_append_sheet(wb, ws, 'Concesionarios');
   const fname = 'recall_'+r.name.replace(/[^a-zA-Z0-9]/g,'_')+'_concesionarios.xlsx';
   XLSX.writeFile(wb, fname);
+}
+
+// ──── Comunicado a la red (juntar mails de concesionarios) ────
+function getNetworkEmails() {
+  const re = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/;
+  const seen = new Map(); // minúsculas -> original
+  try {
+    Object.keys(dealerProfiles).forEach(function(code){
+      const raw = (dealerProfiles[code] && dealerProfiles[code].dlr_email) || '';
+      raw.split(/[;,]+/).forEach(function(part){
+        const e = part.trim().replace(/\s+/g, '');
+        if (e && re.test(e)) { const k = e.toLowerCase(); if (!seen.has(k)) seen.set(k, e); }
+      });
+    });
+  } catch(err) {}
+  return Array.from(seen.values());
+}
+function openNetworkMail() {
+  const emails = getNetworkEmails();
+  // contar concesionarios que tienen al menos un mail válido
+  let dealersWith = 0;
+  try {
+    Object.keys(dealerProfiles).forEach(function(code){
+      const raw = (dealerProfiles[code] && dealerProfiles[code].dlr_email) || '';
+      if (raw.split(/[;,]+/).some(function(p){ return re_ok(p); })) dealersWith++;
+    });
+  } catch(e){}
+  function re_ok(p){ return /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test((p||'').trim().replace(/\s+/g,'')); }
+  document.getElementById('nm-summary').innerHTML = '<b>' + emails.length + '</b> direcciones únicas, de <b>' + dealersWith + '</b> concesionarios con mail cargado.';
+  document.getElementById('nm-emails').value = emails.join('; ');
+  document.getElementById('nm-subject').value = '';
+  document.getElementById('nm-body').value = '';
+  document.getElementById('modal-network-mail').classList.add('active');
+}
+function networkMailCopy() {
+  const text = document.getElementById('nm-emails').value;
+  const emails = getNetworkEmails();
+  function done(){ alert('Copiadas ' + emails.length + ' direcciones. Pegalas en el campo CCO (copia oculta) de tu correo.'); }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, function(){ fallbackCopy(); });
+  } else { fallbackCopy(); }
+  function fallbackCopy(){
+    const ta = document.getElementById('nm-emails');
+    ta.focus(); ta.select();
+    try { document.execCommand('copy'); done(); }
+    catch(e){ alert('No se pudo copiar automáticamente. Seleccioná el texto del recuadro de direcciones y copialo a mano (Ctrl+C).'); }
+  }
+}
+function networkMailMailto() {
+  const emails = getNetworkEmails();
+  if (!emails.length) { alert('No hay direcciones cargadas en los perfiles de los concesionarios.'); return; }
+  const subject = document.getElementById('nm-subject').value || '';
+  const body = document.getElementById('nm-body').value || '';
+  const url = 'mailto:?bcc=' + encodeURIComponent(emails.join(',')) + '&subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+  if (url.length > 1800) {
+    if (!confirm('Son muchas direcciones (' + emails.length + ') y es probable que tu programa de correo no las cargue todas (hay un límite de longitud). Lo más seguro es usar "Copiar direcciones" y pegarlas en CCO.\n\n¿Querés intentar abrir el correo igual?')) return;
+  }
+  window.location.href = url;
 }
 
 function renderRecalls() {
