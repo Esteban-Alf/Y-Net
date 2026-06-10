@@ -9196,6 +9196,11 @@ if (!window.__YNET_CLOUD) { initApp(); }
   });
   window.__sb = sb;
 
+  // Token de sesión cacheado (para el guardado de emergencia sincrónico al cerrar)
+  let _accessToken = null;
+  try { sb.auth.getSession().then(function(r){ _accessToken = (r && r.data && r.data.session) ? r.data.session.access_token : _accessToken; }).catch(function(){}); } catch(e){}
+  try { sb.auth.onAuthStateChange(function(_e, session){ _accessToken = session ? session.access_token : _accessToken; }); } catch(e){}
+
   // ---- Espejo de datos: localStorage <-> Supabase (tabla app_data) ----
   const _origSet = localStorage.setItem.bind(localStorage);
   const _origRemove = localStorage.removeItem.bind(localStorage);
@@ -9205,8 +9210,36 @@ if (!window.__YNET_CLOUD) { initApp(); }
   localStorage.setItem = function(k, v){ _origSet(k, v); if (isSharedKey(k)) cloudUpsert(k, v); };
   localStorage.removeItem = function(k){ _origRemove(k); if (isSharedKey(k)) cloudDelete(k); };
   let _q = Promise.resolve();
-  function cloudUpsert(k, v){ _q = _q.then(() => sb.from('app_data').upsert({ k:k, v:v, updated_at:new Date().toISOString() }, { onConflict:'k' }).then(r => { if(r.error) console.warn('upsert', k, r.error.message); }, e => console.warn('upsert', e))); }
-  function cloudDelete(k){ _q = _q.then(() => sb.from('app_data').delete().eq('k', k).then(()=>{}, e => console.warn('del', e))); }
+  const _pending = new Map(); // claves con escritura aún no confirmada en la nube
+  function cloudUpsert(k, v){
+    _pending.set(k, v);
+    _q = _q.then(() => sb.from('app_data').upsert({ k:k, v:v, updated_at:new Date().toISOString() }, { onConflict:'k' }).then(r => {
+      if (r.error) { console.warn('upsert', k, r.error.message); }
+      else if (_pending.get(k) === v) { _pending.delete(k); } // confirmada
+    }, e => console.warn('upsert', e)));
+  }
+  function cloudDelete(k){ _pending.delete(k); _q = _q.then(() => sb.from('app_data').delete().eq('k', k).then(()=>{}, e => console.warn('del', e))); }
+
+  // Guardado de emergencia: si el usuario recarga/cierra con escrituras sin subir,
+  // las mandamos de forma SINCRÓNICA para no perder lo recién cargado.
+  function flushPendingSync(){
+    if (!_pending.size || !_accessToken) return;
+    const rows = [];
+    _pending.forEach(function(v, k){ rows.push({ k:k, v:v, updated_at:new Date().toISOString() }); });
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', SUPABASE_URL + '/rest/v1/app_data?on_conflict=k', false); // sincrónico
+      xhr.setRequestHeader('apikey', SUPABASE_PUBLISHABLE_KEY);
+      xhr.setRequestHeader('Authorization', 'Bearer ' + _accessToken);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.setRequestHeader('Prefer', 'resolution=merge-duplicates,return=minimal');
+      xhr.send(JSON.stringify(rows));
+      if (xhr.status >= 200 && xhr.status < 300) _pending.clear();
+    } catch(e){ /* si falla, igual el flujo asíncrono pudo haber subido algo */ }
+  }
+  window.addEventListener('pagehide', flushPendingSync);
+  window.addEventListener('beforeunload', flushPendingSync);
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'hidden') flushPendingSync(); });
 
   async function hydrate(){
     const { data, error } = await sb.from('app_data').select('k,v');
