@@ -4780,6 +4780,64 @@ function getRecallStats(r) {
   return {total, done, pct, byAssigned, byPerformer, byZone, uniqueDealerCount: uniqueCodes.size};
 }
 
+// KPIs a nivel módulo, separados por organización (YMARG / YMUY)
+function getRecallModuleKPIs() {
+  const dealerOrg = {};
+  DEALERS.forEach(d => { if (d.code) dealerOrg[d.code] = d.o; });
+  const org = { YMARG: {total:0, done:0, recalls:new Set()}, YMUY: {total:0, done:0, recalls:new Set()} };
+  recalls.forEach(r => {
+    (r.units || []).forEach(u => {
+      const code = u.assignedCode || u.dealerCode;
+      const o = dealerOrg[code];
+      if (o === 'YMARG' || o === 'YMUY') {
+        org[o].total++;
+        if (u.serviced) org[o].done++;
+        org[o].recalls.add(r.id);
+      }
+    });
+  });
+  return {
+    YMARG: { pct: org.YMARG.total ? Math.round(org.YMARG.done/org.YMARG.total*100) : 0, count: org.YMARG.recalls.size },
+    YMUY:  { pct: org.YMUY.total  ? Math.round(org.YMUY.done/org.YMUY.total*100)   : 0, count: org.YMUY.recalls.size }
+  };
+}
+
+// Estados de notificación/confirmación por campaña
+function getRecallStatus(r) {
+  const s = getRecallStats(r);
+  const codes = Object.keys(s.byAssigned);
+  const notifs = r.notifications || {};
+  const confs = r.confirmations || {};
+  const now = new Date();
+  let pendientes = 0, confirmar = 0, sinConf = 0, confirmados = 0;
+  codes.forEach(code => {
+    if (confs[code]) { confirmados++; return; }
+    const nd = notifs[code];
+    if (!nd) { pendientes++; return; }
+    const days = (now - new Date(nd)) / 86400000;
+    if (days >= 5) sinConf++; else confirmar++;
+  });
+  const ym = now.toISOString().slice(0,7);
+  const monthDealers = new Set();
+  (r.units || []).forEach(u => {
+    if (u.serviced && u.serviceDate) {
+      const iso = parseRecallDate(u.serviceDate);
+      if (iso && iso.slice(0,7) === ym) monthDealers.add(u.servicedByCode || u.assignedCode || u.dealerCode);
+    }
+  });
+  return { pendientes, confirmar, sinConf, confirmados, avancesMes: monthDealers.size };
+}
+
+function setRecallConfirmation(recallId, code, checked) {
+  const r = recalls.find(x => x.id === recallId);
+  if (!r) return;
+  if (!r.confirmations) r.confirmations = {};
+  if (checked) r.confirmations[code] = new Date().toISOString().slice(0,10);
+  else delete r.confirmations[code];
+  save(STORAGE.recalls, recalls);
+  openRecallDetail(recallId);
+}
+
 function setRcImportTab(tab) {
   document.querySelectorAll('.rc-import-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
   document.getElementById('rc-import-full').style.display = tab === 'full' ? 'block' : 'none';
@@ -5267,7 +5325,15 @@ function renderRecalls() {
   det.style.display = 'none';
   c.style.display = 'block';
   if (recalls.length === 0) { c.innerHTML = emptyState('No hay campañas activas', 'Cargá una campaña de recall'); return; }
-  c.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;">' +
+  const mk = getRecallModuleKPIs();
+  const pctCol = p => p>=80?'var(--s-done-tx)':p>=50?'#856404':'var(--primary)';
+  let mkHtml = '<div class="kpi-grid" style="margin-bottom:18px;">';
+  mkHtml += '<div class="kpi"><div class="kpi-icon" style="background:#fff;color:'+pctCol(mk.YMARG.pct)+';">%</div><div class="kpi-label">Cumplimiento YMARG</div><div class="kpi-value" style="color:'+pctCol(mk.YMARG.pct)+';">'+mk.YMARG.pct+'%</div></div>';
+  mkHtml += '<div class="kpi"><div class="kpi-icon" style="background:#fff;color:'+pctCol(mk.YMUY.pct)+';">%</div><div class="kpi-label">Cumplimiento YMUY</div><div class="kpi-value" style="color:'+pctCol(mk.YMUY.pct)+';">'+mk.YMUY.pct+'%</div></div>';
+  mkHtml += '<div class="kpi"><div class="kpi-icon">📣</div><div class="kpi-label">Recalls YMARG</div><div class="kpi-value">'+mk.YMARG.count+'</div></div>';
+  mkHtml += '<div class="kpi"><div class="kpi-icon">📣</div><div class="kpi-label">Recalls YMUY</div><div class="kpi-value">'+mk.YMUY.count+'</div></div>';
+  mkHtml += '</div>';
+  c.innerHTML = mkHtml + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;">' +
     recalls.map(r => {
       const s = getRecallStats(r);
       const sb = r.status === 'Cerrada' ? 'bdg-done' : r.status === 'En seguimiento' ? 'bdg-prog' : 'bdg-pend';
@@ -5292,6 +5358,13 @@ function openRecallDetail(id) {
   html += '<div class="kpi"><div class="kpi-icon">✅</div><div class="kpi-label">Servicios realizados</div><div class="kpi-value" style="color:var(--s-done-tx);">'+s.done+'</div></div>';
   html += '<div class="kpi" style="background:'+(s.pct>=80?'var(--s-done-bg)':s.pct>=50?'#FEF3C7':'var(--primary-xlight)')+';"><div class="kpi-icon" style="background:#fff;">%</div><div class="kpi-label">Cumplimiento</div><div class="kpi-value" style="color:'+(s.pct>=80?'var(--s-done-tx)':s.pct>=50?'#856404':'var(--primary)')+';">'+s.pct+'%</div></div>';
   html += '<div class="kpi"><div class="kpi-icon">🏪</div><div class="kpi-label">Concesionarios</div><div class="kpi-value">'+s.uniqueDealerCount+'</div></div>';
+  html += '</div>';
+  const st = getRecallStatus(r);
+  html += '<div class="kpi-grid" style="margin-bottom:16px;">';
+  html += '<div class="kpi"><div class="kpi-icon">⏳</div><div class="kpi-label">Pendientes de notificar</div><div class="kpi-value" style="color:var(--primary);">'+st.pendientes+'</div></div>';
+  html += '<div class="kpi"><div class="kpi-icon">📨</div><div class="kpi-label">Confirmar recepción</div><div class="kpi-value" style="color:#856404;">'+st.confirmar+'</div></div>';
+  html += '<div class="kpi"><div class="kpi-icon">⚠</div><div class="kpi-label">Sin confirmación (+5 días)</div><div class="kpi-value" style="color:var(--primary);">'+st.sinConf+'</div></div>';
+  html += '<div class="kpi"><div class="kpi-icon">📈</div><div class="kpi-label">Avances del mes</div><div class="kpi-value" style="color:var(--s-done-tx);">'+st.avancesMes+'</div><div class="kpi-sub">concesionarios con servicios este mes</div></div>';
   html += '</div>';
   html += '<div class="card" style="margin-bottom:16px;"><div class="card-h" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;"><div><div class="card-title">Avance mensual</div><div class="card-sub">Filtrá por fechas para ver cuántos servicios se hicieron y quiénes los realizaron</div></div>';
   html += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;"><label style="font-size:11.5px;color:var(--text-secondary);">Desde</label><input type="date" id="rc-flt-from" style="font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;"><label style="font-size:11.5px;color:var(--text-secondary);">Hasta</label><input type="date" id="rc-flt-to" style="font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;"><button class="btn btn-primary btn-sm" onclick="applyRecallDateFilter(\''+r.id+'\')">Aplicar</button><button class="btn btn-ghost btn-sm" onclick="clearRecallDateFilter(\''+r.id+'\')">Limpiar</button></div></div>';
@@ -5346,6 +5419,8 @@ function openRecallDetail(id) {
       html += '<div style="font-size:9.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px;">Notificado</div>';
       html += '<input type="date" value="'+esc(notifiedDate)+'" onchange="setRecallNotification(\''+r.id+'\',\''+d.code+'\',this.value)" onclick="event.stopPropagation()" style="font-size:11px;padding:2px 5px;border:1px solid var(--border);border-radius:4px;color:'+(notifiedDate?'var(--s-done-tx)':'var(--text-muted)')+';width:100%;">';
       html += '</div>';
+      const confirmedDlr = !!((r.confirmations || {})[d.code]);
+      html += '<div style="text-align:center;min-width:72px;"><div style="font-size:9.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px;">Confirmado</div><input type="checkbox" '+(confirmedDlr?'checked':'')+' onchange="setRecallConfirmation(\''+r.id+'\',\''+d.code+'\',this.checked)" onclick="event.stopPropagation()" style="width:16px;height:16px;cursor:pointer;"></div>';
       html += '<div style="text-align:right;min-width:80px;"><div style="font-size:12px;font-weight:600;color:'+color+';">'+d.done+'/'+d.total+' · '+d.pct+'%</div><div class="progress" style="width:80px;margin-top:4px;"><div class="progress-bar" style="width:'+d.pct+'%;background:'+color+'"></div></div></div>';
       const dpEmail = (dealerProfiles[d.code]||{}).dlr_email || '';
       html += '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();notifyDealerByMail(\''+r.id+'\',\''+d.code+'\')" title="'+(dpEmail?'Notificar por mail':'Sin email cargado')+'" style="padding:4px 7px;font-size:11px;'+(dpEmail?'':'opacity:0.5;')+'">✉ Notificar</button>';
