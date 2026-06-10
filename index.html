@@ -627,6 +627,12 @@ textarea{resize:vertical;min-height:60px;}
     <div class="field"><label>Recurrencia</label>
       <select id="act-recur"><option value="">Única</option><option value="weekly">Semanal</option><option value="monthly">Mensual</option></select>
     </div>
+    <div class="field-row">
+      <div class="field"><label>Vencimiento</label><input type="date" id="act-due"></div>
+      <div class="field"><label>Criticidad</label>
+        <select id="act-priority"><option value="Media">Media</option><option value="Alta">Alta</option><option value="Baja">Baja</option></select>
+      </div>
+    </div>
     <div id="act-team-section" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px;display:none;">
       <div style="font-size:12px;font-weight:600;color:var(--primary);margin-bottom:8px;">Equipo</div>
       <div class="field" id="act-assign-field"><label>Asignar a</label>
@@ -2304,7 +2310,7 @@ function renderDayList() {
   list.innerHTML = acts.map(a => {
     const sb = a.status === 'Hecho' ? 'bdg-done' : a.status === 'En curso' ? 'bdg-prog' : a.status === 'Cancelada' ? 'bdg-canc' : 'bdg-pend';
     const cb = a.country === 'ARG' ? 'bdg-arg' : a.country === 'UY' ? 'bdg-uy' : 'bdg-amb';
-    return '<div class="day-item"><div class="day-time">'+(a.time||'—')+'</div><div class="day-info"><div class="day-title">'+esc(a.title)+'</div><div class="day-meta">'+esc(a.type)+(a.duration?' · '+a.duration+' min':'')+(a.notes?' · '+esc(a.notes.slice(0,40)):'')+'</div></div><div class="day-actions"><span class="bdg '+cb+'">'+a.country+'</span><span class="bdg '+sb+'">'+a.status+'</span><button class="btn btn-ghost btn-icon" onclick="openActivityModal(\''+a.id+'\')">✎</button></div></div>';
+    return '<div class="day-item"><div class="day-time">'+(a.time||'—')+'</div><div class="day-info"><div class="day-title">'+esc(a.title)+'</div><div class="day-meta">'+esc(a.type)+(a.duration?' · '+a.duration+' min':'')+(a.due?' · ⏰ vence '+a.due:'')+(a.notes?' · '+esc(a.notes.slice(0,40)):'')+'</div></div><div class="day-actions">'+(a.priority==='Alta'?'<span class="bdg" style="background:#FEE2E2;color:#B91C1C;">Alta</span>':a.priority==='Baja'?'<span class="bdg" style="background:var(--bg-page);color:var(--text-muted);">Baja</span>':'')+'<span class="bdg '+cb+'">'+a.country+'</span><span class="bdg '+sb+'">'+a.status+'</span><button class="btn btn-ghost btn-icon" onclick="openActivityModal(\''+a.id+'\')">✎</button></div></div>';
   }).join('');
 }
 
@@ -2435,6 +2441,24 @@ function renderAlerts() {
   if (day >= 8 && day <= 12) a.push({txt:'Statement mensual: vence cerca del día 10', col:'warn'});
   if (dow === 4) a.push({txt:'Hoy es jueves: enviar encuestas semanales', col:'info'});
   if (dow === 5) a.push({txt:'Hoy es viernes: procesar facturación de la semana', col:'info'});
+  // Vencimientos de actividades (propias o compartidas conmigo): hoy, mañana o vencidas
+  try {
+    const _now = new Date();
+    const _loc = d => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+    const todayStr = _loc(_now);
+    const _t = new Date(_now); _t.setDate(_t.getDate()+1);
+    const tmrwStr = _loc(_t);
+    const me = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.ze : null;
+    (activities || []).forEach(act => {
+      if (!act.due || act.status === 'Hecho' || act.status === 'Cancelada') return;
+      const mine = !me || act.owner === me || act.assignee === me || (act.watchers || []).indexOf(me) !== -1;
+      if (!mine) return;
+      const crit = act.priority && act.priority !== 'Media' ? '['+act.priority+'] ' : '';
+      if (act.due < todayStr) a.push({txt: crit+'Vencida: '+act.title+' (venció '+act.due+')', col:'warn'});
+      else if (act.due === todayStr) a.push({txt: crit+'Vence hoy: '+act.title, col:'warn'});
+      else if (act.due === tmrwStr) a.push({txt: crit+'Vence mañana: '+act.title, col:'info'});
+    });
+  } catch(e){}
   document.getElementById('dash-alerts').innerHTML = a.map(x => '<div class="alert alert-'+x.col+'">● '+x.txt+'</div>').join('');
 }
 
@@ -3115,6 +3139,8 @@ function openActivityModal(id) {
     document.getElementById('act-duration').value = a.duration || '';
     document.getElementById('act-status').value = a.status;
     document.getElementById('act-recur').value = a.recur || '';
+    document.getElementById('act-due').value = a.due || '';
+    document.getElementById('act-priority').value = a.priority || 'Media';
     document.getElementById('act-notes').value = a.notes || '';
   } else {
     document.getElementById('act-title').value = '';
@@ -3125,6 +3151,8 @@ function openActivityModal(id) {
     document.getElementById('act-duration').value = '';
     document.getElementById('act-status').value = 'Pendiente';
     document.getElementById('act-recur').value = '';
+    document.getElementById('act-due').value = '';
+    document.getElementById('act-priority').value = 'Media';
     document.getElementById('act-notes').value = '';
   }
   const _aObj = id ? activities.find(x => x.id === id) : null;
@@ -3149,6 +3177,8 @@ function saveActivity() {
     duration: document.getElementById('act-duration').value ? parseInt(document.getElementById('act-duration').value) : null,
     status: document.getElementById('act-status').value,
     recur: document.getElementById('act-recur').value,
+    due: document.getElementById('act-due').value || '',
+    priority: document.getElementById('act-priority').value || 'Media',
     notes: document.getElementById('act-notes').value,
     owner: prev && prev.owner ? prev.owner : (currentUser ? currentUser.ze : ''),
     assignee: assignee || '',
@@ -5042,16 +5072,24 @@ function notifyDealerByMail(recallId, code) {
   }
   const units = (r.units || []).filter(u => (u.assignedCode || u.dealerCode) === code);
   const pending = units.filter(u => !u.serviced);
-  const subject = 'Seguimiento campaña recall '+(r.name||'')+' - Unidades afectadas';
-  const dealerLine = (dlr?dlr.n:code) + ' - ' + code;
+  const dealerName = (dlr ? dlr.n : code);
+  const dealerLine = dealerName.toUpperCase() + ' - ' + code;
+  const subject = ('Campaña de recall ' + (r.name || '') + ' - ' + dealerLine).toUpperCase();
   let body = 'Estimado ' + dealerLine + '\n\n';
-  body += 'Nos comunicamos con el fin de darle seguimiento a las campañas de recall: '+(r.name||'')+'\n';
-  if (r.models) body += 'Modelos involucrados: '+r.models+'\n';
-  if (r.start) body += 'Vigencia desde: '+r.start+'\n';
-  body += 'Unidades afectadas asignadas a su concesionario: '+units.length+'\n\n';
-  body += 'Adjuntamos el listado de unidades en el archivo adjunto "unidades afectadas"\n\n';
-  body += 'Ante cualquier consulta estamos a disposición.\n\n';
-  body += 'Saludos cordiales,';
+  body += 'Compartimos la información detallada sobre la campaña de recall activa:\n';
+  body += '"' + (r.name || '') + '".\n';
+  body += 'Modelos involucrados: ' + (r.models || '-') + '\n';
+  body += 'Vigencia desde: ' + (r.start || '-') + '\n\n';
+  body += 'Adjuntos:\n';
+  body += '• Listado de unidades afectadas\n';
+  body += '• Instructivo paso a paso de aplicación de la campaña\n';
+  body += '• Acta de intervención de campaña de recall\n\n';
+  body += 'Propuesta:\n';
+  body += 'Nuestro objetivo es acompañarlos, dar seguimiento y analizar oportunidades de mejoras sobre el proceso actual de campañas activas a realizar.\n\n';
+  body += 'Para ello, adjuntamos el listado de unidades involucradas que le fueron asignadas para que conciliemos una estrategia de acción para dar cumplimiento con las obligaciones que nos demanda casa matriz, la cual será auditada y medible con el fin de observar el compromiso y cumplimiento mes a mes hasta finalizar con el listado de unidades.\n\n';
+  body += 'Estaremos en contacto para planificar las acciones a seguir y la metodología de cómo manejar dicha información.\n\n';
+  body += 'Les solicito por favor la confirmación de recepción y comprensión de este mail, cualquier duda o consulta puede comunicarse por nuestros canales habituales de Garantías.\n\n';
+  body += 'Ante cualquier consulta estaremos a disposición. Saludos cordiales,';
   const firstEmail = p.dlr_email.split(/[;,]/)[0].trim();
   const mailto = 'mailto:'+encodeURIComponent(firstEmail)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
   window.location.href = mailto;
