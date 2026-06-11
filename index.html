@@ -1565,11 +1565,39 @@ function getRoleScopedKey(baseKey) {
 }
 
 
+// Auto-recuperación de módulos COMPARTIDOS (Capacitaciones, Biblioteca).
+// Si la clave global está vacía pero existe una variante vieja (__role_* / __user_*)
+// con datos, la promueve a la global. Es idempotente y no destructivo: solo actúa
+// cuando la global está vacía, así nunca pisa algo que ya tenga contenido.
+function healSharedData() {
+  const sharedBaseKeys = [
+    'gg_trainings_v1','gg_training_participants_v1','gg_training_areas_v1',
+    'gg_training_topics_v1','gg_training_materials_v1',
+    'gg_library_v1','gg_library_categories_v1','gg_library_favorites_v1'
+  ];
+  const isEmpty = v => (v === null || v === '' || v === '[]' || v === '{}');
+  sharedBaseKeys.forEach(base => {
+    if (!isEmpty(localStorage.getItem(base))) return; // ya tiene datos compartidos
+    let best = null, bestLen = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf(base + '__') === 0) {
+        const v = localStorage.getItem(k);
+        if (!isEmpty(v) && v.length > bestLen) { best = v; bestLen = v.length; }
+      }
+    }
+    if (best !== null) localStorage.setItem(base, best); // promueve a global (se sincroniza)
+  });
+}
+
 function reloadRoleScopedState() {
   // Asegura la bandeja personal del usuario antes de cargar (migración no destructiva)
   migrateToUserScope();
+  // Recupera datos de módulos compartidos que quedaron en claves viejas
+  healSharedData();
   // Re-load per-profile state arrays under the current user scope
   activities = load(STORAGE.activities);
+  cases = load(STORAGE.cases);
   counterLog = load(STORAGE.counter);
   trips = load(STORAGE.trips);
   tripVisits = load(STORAGE.tripVisits);
