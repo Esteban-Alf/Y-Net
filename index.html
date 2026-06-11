@@ -1590,6 +1590,27 @@ function healSharedData() {
   });
 }
 
+// Dueño primario: el usuario cuyo mail es el responsable (ealfonzo). Los datos
+// viejos sin dueño se le atribuyen, así dejan de verse en el calendario de otros.
+function primaryOwnerZe() {
+  for (let i = 0; i < SHARED_EDITOR_EMAILS.length; i++) {
+    const u = (users || []).find(x => _userEmails(x).indexOf(SHARED_EDITOR_EMAILS[i]) !== -1);
+    if (u && u.ze) return u.ze;
+  }
+  return null;
+}
+function stampLegacyOwnership() {
+  const pz = primaryOwnerZe();
+  if (!pz) return; // sin dueño primario identificable, no tocamos (se mantiene visible)
+  let ca = false, ct = false, cn = false;
+  (activities || []).forEach(a => { if (!a.owner) { a.owner = pz; ca = true; } });
+  (trips || []).forEach(t => { if (!t.owner) { t.owner = pz; ct = true; } });
+  (trainings || []).forEach(t => { if (!t.owner) { t.owner = pz; cn = true; } });
+  if (ca) save(STORAGE.activities, activities);
+  if (ct) save(STORAGE.trips, trips);
+  if (cn) save(STORAGE.trainings, trainings);
+}
+
 function reloadRoleScopedState() {
   // Asegura la bandeja personal del usuario antes de cargar (migración no destructiva)
   migrateToUserScope();
@@ -1618,6 +1639,8 @@ function reloadRoleScopedState() {
   if (!trainingAreas || trainingAreas.length === 0) { trainingAreas = ['Garantías']; save(STORAGE.trainingAreas, trainingAreas); }
   if (!trainingTopics || trainingTopics.length === 0) { trainingTopics = DEFAULT_GG_TOPICS.slice(); save(STORAGE.trainingTopics, trainingTopics); }
   if (!libraryCategories || libraryCategories.length === 0) { libraryCategories = DEFAULT_LIB_CATEGORIES.slice(); save(STORAGE.libraryCategories, libraryCategories); }
+  // Atribuir datos viejos sin dueño al dueño primario (para que no aparezcan en el calendario de otros)
+  stampLegacyOwnership();
 }
 
 
@@ -2230,7 +2253,7 @@ function activityVisibleToMe(a) {
   // Own tasks, tasks assigned to me, tasks where I'm a watcher
   if (!currentUser) return true; // no user context (admin/demo) → show all
   const ze = currentUser.ze;
-  if (!a.owner && !a.assignee) return true; // legacy activities with no team data
+  if (!a.owner && !a.assignee) return primaryOwnerZe() === null; // sin dueño: solo si no hay dueño primario a quien atribuir
   if (a.owner === ze) return true;
   if (a.assignee === ze) return true;
   if (Array.isArray(a.watchers) && a.watchers.indexOf(ze) !== -1) return true;
@@ -2306,9 +2329,10 @@ function getActivitiesOn(dateStr) {
       });
     }
   });
-  // Capacitaciones como entradas virtuales
+  // Capacitaciones como entradas virtuales (solo las del usuario actual)
   trainings.forEach(t => {
     if (t.date === dateStr) {
+      if (currentUser && t.owner && t.owner !== currentUser.ze && _teamViewMembers.indexOf(t.owner) === -1) return;
       out.push({
         id: 't-'+t.id, virtual:'training', refId:t.id,
         title: 'Capacitación: ' + t.topic,
@@ -2333,6 +2357,7 @@ function getTripsOn(dStr) {
   // Returns trips that have dStr falling between start and end (inclusive)
   return trips.filter(t => {
     if (!t.start && !t.end) return false;
+    if (currentUser && t.owner && t.owner !== currentUser.ze && _teamViewMembers.indexOf(t.owner) === -1) return false;
     const start = t.start || t.end;
     const end = t.end || t.start;
     return dStr >= start && dStr <= end;
@@ -6372,6 +6397,7 @@ function saveTrip() {
   const existing = editingTripId ? trips.find(t=>t.id===editingTripId) : null;
   const obj = {
     id: editingTripId || ('t'+Date.now()),
+    owner: existing && existing.owner ? existing.owner : (currentUser ? currentUser.ze : ''),
     name: name,
     responsible: document.getElementById('tr-responsible').value.trim(),
     vehicle: document.getElementById('tr-vehicle').value.trim(),
@@ -7325,7 +7351,13 @@ function openTrainingDetail(id) {
     const d = (t.dealerIdx != null) ? DEALERS[t.dealerIdx] : null;
     subEl.innerHTML = trainingStatusBadge(t.status) + ' · ' + (t.date||'sin fecha') + (t.time?' '+t.time:'') + (t.duration?' · '+t.duration+' min':'') + (d?' · '+esc(d.n):'');
   }
-  if (actEl) actEl.innerHTML = '<button class="btn btn-ghost btn-sm" onclick="renderTrainings()">← Volver al cronograma</button> <button class="btn btn-ghost btn-sm" onclick="openTrainingModal(\'' + id + '\')">✎ Editar</button>';
+  if (actEl) {
+    let _acts = '<button class="btn btn-ghost btn-sm" onclick="renderTrainings()">← Volver al cronograma</button> <button class="btn btn-ghost btn-sm" onclick="openTrainingModal(\'' + id + '\')">✎ Editar</button>';
+    if (t.status === 'Realizada' || t.status === 'Finalizada') {
+      _acts += ' <button class="btn btn-primary btn-sm" onclick="sendTrainingDetailMail(\'' + id + '\')">✉ Enviar detalle</button>';
+    }
+    actEl.innerHTML = _acts;
+  }
   // Hide dashboard + objectives during detail view
   const objBox = document.getElementById('objectives-container');
   if (objBox) objBox.style.display = 'none';
@@ -7355,6 +7387,93 @@ function openTrainingDetail(id) {
 function setTrainingTab(tab) {
   currentTrainingTab = tab;
   if (currentTrainingId) openTrainingDetail(currentTrainingId);
+}
+
+// Mail del responsable de Garantías del concesionario (mejor esfuerzo)
+function trainingGarantiasEmail(t) {
+  if (t.dealerIdx == null) return '';
+  const d = DEALERS[t.dealerIdx]; if (!d) return '';
+  const prof = dealerProfiles[d.code] || {};
+  const sps = Array.isArray(prof.salesPoints) ? prof.salesPoints : [];
+  let cands = sps;
+  if (t.salesPointId) { const one = sps.find(s => s.id === t.salesPointId); if (one) cands = [one]; }
+  for (let i = 0; i < cands.length; i++) {
+    const sp = cands[i];
+    const g = (sp.responsables && sp.responsables.garantias) || [];
+    const tit = g.find(p => p && p.email && p.responsibility === 'Titular');
+    if (tit) return tit.email;
+    const any = g.find(p => p && p.email);
+    if (any) return any.email;
+    if (sp.gar_email) return sp.gar_email; // formato viejo
+  }
+  return '';
+}
+
+// Envía el detalle de la capacitación: descarga los materiales para adjuntar y
+// abre el mail con el cuerpo armado por secciones, dirigido al responsable de Garantías.
+function sendTrainingDetailMail(id) {
+  const t = trainings.find(x => x.id === id);
+  if (!t) return;
+  const d = (t.dealerIdx != null) ? DEALERS[t.dealerIdx] : null;
+  const dealerLine = d ? (d.n + ' - ' + d.code) : 'Concesionario';
+  // Destinatario (mejor esfuerzo): primer mail válido del responsable de Garantías
+  let to = '';
+  const gem = trainingGarantiasEmail(t);
+  if (gem) { const first = gem.split(/[;,]/).map(s => s.trim()).filter(Boolean)[0]; if (first) to = first; }
+  // Descargar materiales aplicados (para adjuntar a mano)
+  const mats = (t.materialsApplied || []).map(did => library.find(x => x.id === did)).filter(Boolean);
+  mats.forEach((doc, i) => {
+    if (!doc.data) return;
+    setTimeout(() => {
+      const a = document.createElement('a');
+      a.href = doc.data; a.download = doc.name || ('material_' + (i + 1));
+      document.body.appendChild(a); a.click(); a.remove();
+    }, i * 400);
+  });
+  // Cuerpo por secciones
+  const ev = t.evaluation || {};
+  const parts = Array.isArray(t.participants) ? t.participants : [];
+  const nl = '\n';
+  let body = 'Estimado/a responsable de Garantías de ' + dealerLine + ',' + nl + nl;
+  body += 'Compartimos el detalle de la capacitación realizada.' + nl + nl;
+  body += '— DATOS DE LA CAPACITACIÓN —' + nl;
+  body += 'Tema: ' + (t.topic || '-') + nl;
+  body += 'Fecha: ' + (t.date || '-') + (t.time ? ' ' + t.time : '') + nl;
+  if (t.duration) body += 'Duración: ' + t.duration + ' min' + nl;
+  body += 'Concesionario: ' + dealerLine + nl;
+  if (t.audience) body += 'Audiencia: ' + t.audience + nl;
+  if (t.responsible) body += 'Responsable: ' + t.responsible + nl;
+  if (t.objective) body += 'Objetivo: ' + t.objective + nl;
+  body += nl;
+  body += '— PARTICIPANTES (' + parts.length + ') —' + nl;
+  if (parts.length) parts.forEach(p => { body += '• ' + (p.name || '-') + (p.role ? ' (' + p.role + ')' : '') + nl; });
+  else body += 'Sin participantes cargados.' + nl;
+  body += nl;
+  body += '— EVALUACIÓN —' + nl;
+  let evAny = false;
+  if (ev.result) { body += 'Resultado: ' + ev.result + nl; evAny = true; }
+  if (ev.comprehension != null) { body += 'Comprensión: ' + ev.comprehension + nl; evAny = true; }
+  if (ev.participation != null) { body += 'Participación: ' + ev.participation + nl; evAny = true; }
+  if (ev.survey) { body += 'Encuesta: ' + ev.survey + nl; evAny = true; }
+  if (ev.feedback) { body += 'Devolución: ' + ev.feedback + nl; evAny = true; }
+  if (!evAny) body += 'Sin evaluación cargada.' + nl;
+  body += nl;
+  if (t.observations || t.nextAction) {
+    body += '— OBSERVACIONES Y COMENTARIOS —' + nl;
+    if (t.observations) body += t.observations + nl;
+    if (t.nextAction) body += 'Próxima acción: ' + t.nextAction + nl;
+    body += nl;
+  }
+  body += '— DOCUMENTOS —' + nl;
+  if (mats.length) {
+    mats.forEach(doc => { body += '• ' + (doc.name || 'documento') + nl; });
+    body += '(Los documentos se descargaron en tu equipo para que los adjuntes a este correo.)' + nl;
+  } else { body += 'Sin documentos asociados.' + nl; }
+  body += nl + 'Quedamos a disposición por cualquier consulta.' + nl + 'Saludos cordiales,' + nl + 'Garantías';
+
+  const subject = ('Detalle de capacitación - ' + (t.topic || '') + (d ? ' - ' + d.n : '')).toUpperCase();
+  if (!to) setTimeout(() => alert('No hay mail del responsable de Garantías cargado para este concesionario. Se abrió el correo con el cuerpo listo: agregá la dirección manualmente.'), mats.length ? mats.length * 400 + 200 : 0);
+  window.location.href = 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
 }
 
 function renderTrainingTabContent(t) {
@@ -8626,7 +8745,8 @@ function saveTraining() {
     materialsApplied: _existing ? (_existing.materialsApplied || []) : [],
     evaluation: _existing ? (_existing.evaluation || {}) : {},
     observations: _existing ? (_existing.observations || '') : '',
-    nextAction: _existing ? (_existing.nextAction || '') : ''
+    nextAction: _existing ? (_existing.nextAction || '') : '',
+    owner: _existing && _existing.owner ? _existing.owner : (currentUser ? currentUser.ze : '')
   };
   if (editingTrainingId) trainings = trainings.map(t => t.id === editingTrainingId ? obj : t);
   else trainings.push(obj);
