@@ -351,7 +351,7 @@ textarea{resize:vertical;min-height:60px;}
     <div class="nav-item" data-page="panel"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0z"/><path d="M12 7v5l3 3"/></svg> Panel de control</div>
     <div class="nav-item" data-page="contador"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M8 4v4M16 4v4"/></svg> Cuantificador</div>
     <div class="nav-item" data-page="concesionarios"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 9l9-6 9 6v10a2 2 0 0 1-2 2h-14a2 2 0 0 1-2-2z"/><path d="M9 21V12h6v9"/></svg> Concesionarios</div>
-    <div class="nav-item" data-page="analisis"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg> Análisis de mercado</div>
+    <div class="nav-item" data-page="analisis"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg> Desarrollo de Actividades</div>
     <div class="nav-item" data-page="recall"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg> Recall</div>
     <div class="nav-item" data-page="viajes"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12l3-9 6 6 6-6 3 9-3 9-6-6-6 6z"/></svg> Viajes</div>
     <div class="nav-item" data-page="capacitaciones"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5a6 3 0 0 0 12 0v-5"/></svg> Capacitaciones</div>
@@ -499,7 +499,7 @@ textarea{resize:vertical;min-height:60px;}
         <button class="btn btn-ghost btn-sm" onclick="toggleDealerGrouping()" id="dlr-group-btn" title="Agrupar por zona">⊞ Agrupar</button>
         <select id="dlr-filter-status" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;" onchange="renderDealers()"><option value="activo">Activos</option><option value="fuera">Fuera de servicio</option><option value="todos">Todos</option></select>
         <select id="dlr-filter-prio" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;" onchange="renderDealers()"><option value="">Todos</option><option value="prio">Solo prioritarios</option><option value="noprio">No prioritarios</option></select>
-        <button class="btn btn-primary" onclick="openNewDealerModal()">+ Nuevo</button>
+        <button class="btn btn-primary" id="dlr-new-btn" onclick="openNewDealerModal()">+ Nuevo</button>
       </div>
     </div>
     <div class="content"><div id="dealers-container"></div></div>
@@ -508,7 +508,7 @@ textarea{resize:vertical;min-height:60px;}
   <!-- ANALISIS DE MERCADO -->
   <div class="page" id="page-analisis">
     <div class="ph">
-      <div><div class="ph-title">Análisis de mercado</div><div class="ph-sub">Casos en seguimiento de causa raíz</div></div>
+      <div><div class="ph-title">Desarrollo de Actividades</div><div class="ph-sub">Casos en seguimiento de causa raíz</div></div>
       <div class="ph-actions"><button class="btn btn-primary" onclick="openCaseModal()">+ Nuevo caso</button></div>
     </div>
     <div class="content"><div id="cases-container"></div></div>
@@ -518,7 +518,7 @@ textarea{resize:vertical;min-height:60px;}
   <div class="page" id="page-recall">
     <div class="ph">
       <div><div class="ph-title">Recall</div><div class="ph-sub">Campañas activas y avance</div></div>
-      <div class="ph-actions"><button class="btn btn-ghost" onclick="openNetworkMail()">✉ Enviar comunicado a la red</button><button class="btn btn-primary" onclick="openRecallModal()">+ Nueva campaña</button></div>
+      <div class="ph-actions"><button class="btn btn-ghost" onclick="openNetworkMail()">✉ Enviar comunicado a la red</button><button class="btn btn-primary" id="recall-new-btn" onclick="openRecallModal()">+ Nueva campaña</button></div>
     </div>
     <div class="content">
       <div id="recall-container"></div>
@@ -606,6 +606,7 @@ textarea{resize:vertical;min-height:60px;}
       <button class="modal-close" onclick="closeModal('modal-activity')">×</button>
     </div>
     <div class="field"><label>Título *</label><input type="text" id="act-title" placeholder="Ej: Statement mensual"></div>
+    <div id="act-share-status" style="margin:-2px 0 10px;display:none;"></div>
     <div class="field-row">
       <div class="field"><label>Tipo <span style="cursor:pointer;color:var(--primary);font-size:11px;" onclick="openActTypesConfig()" title="Configurar tipos">⚙ editar opciones</span></label>
         <select id="act-type"></select>
@@ -1504,7 +1505,7 @@ const MODULE_CATALOG = [
   { key: 'panel',          label: 'Panel de control' },
   { key: 'contador',       label: 'Cuantificador' },
   { key: 'concesionarios', label: 'Concesionarios' },
-  { key: 'analisis',       label: 'Análisis de mercado' },
+  { key: 'analisis',       label: 'Desarrollo de Actividades' },
   { key: 'recall',         label: 'Recall' },
   { key: 'viajes',         label: 'Viajes' },
   { key: 'capacitaciones', label: 'Capacitaciones' },
@@ -1565,7 +1566,9 @@ function getRoleScopedKey(baseKey) {
 
 
 function reloadRoleScopedState() {
-  // Re-load per-profile state arrays under the current role scope
+  // Asegura la bandeja personal del usuario antes de cargar (migración no destructiva)
+  migrateToUserScope();
+  // Re-load per-profile state arrays under the current user scope
   activities = load(STORAGE.activities);
   counterLog = load(STORAGE.counter);
   trips = load(STORAGE.trips);
@@ -1836,6 +1839,29 @@ function migrateBaseDataToGarantias() {
   localStorage.setItem('gg_migrated_to_garantias_v1', '1');
 }
 
+// Migración no destructiva a "una bandeja por usuario (ZE)".
+// La primera vez que un usuario entra, copia a su bandeja personal lo que hoy ve
+// (datos por rol o, en su defecto, los de la clave base). No borra nada: las claves
+// viejas quedan como respaldo. Idempotente: si la bandeja personal ya existe, no toca.
+function migrateToUserScope() {
+  if (typeof currentUser === 'undefined' || !currentUser || !currentUser.ze) return;
+  const ze = currentUser.ze;
+  PER_PROFILE_KEYS.forEach(k => {
+    const newKey = k + '__user_' + ze;
+    if (localStorage.getItem(newKey) !== null) return; // ya tiene su bandeja personal
+    let src = null;
+    if (currentRole && currentRole !== 'admin') {
+      const rk = localStorage.getItem(k + '__role_' + currentRole);
+      if (rk && rk !== '[]') src = rk;
+    }
+    if (src === null) {
+      const bk = localStorage.getItem(k);
+      if (bk && bk !== '[]') src = bk;
+    }
+    if (src !== null) localStorage.setItem(newKey, src); // copia → se sincroniza a la nube
+  });
+}
+
 function setRole(role) {
   currentRole = role;
   localStorage.setItem('gg_current_role', role);
@@ -1854,14 +1880,34 @@ function applyRoleVisibility() {
     if (!page) return;
     el.style.display = allowed.indexOf(page) !== -1 ? '' : 'none';
   });
-  // Land on the first allowed page if current active is not allowed
+  // Land on the first allowed page if current active is not allowed.
+  // Siempre re-dibujamos la página de aterrizaje (si no, el dashboard arranca vacío).
   const activeNav = document.querySelector('.nav-item.active');
-  if (!activeNav || allowed.indexOf(activeNav.dataset.page) === -1) {
+  let landing = null;
+  if (activeNav && allowed.indexOf(activeNav.dataset.page) !== -1) {
+    landing = activeNav;
+  } else {
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     const firstAllowed = allowed[0];
-    const target = document.querySelector('.nav-item[data-page="'+firstAllowed+'"]');
-    if (target) target.click();
+    landing = document.querySelector('.nav-item[data-page="'+firstAllowed+'"]');
   }
+  if (landing) landing.click();
+}
+
+// ──── Permisos de edición de módulos compartidos (Concesionarios, Recall) ────
+// Todos con acceso pueden VER; solo estos mails (o un admin) pueden MODIFICAR.
+const SHARED_EDITOR_EMAILS = ['ealfonzo@yamaha-motor.com.ar'];
+function _userEmails(u){ return ((u && u.email) || '').toLowerCase().split(/[;,]/).map(s => s.trim()).filter(Boolean); }
+function isAdminUser(){ return currentRole === 'admin' || (currentUser && Array.isArray(currentUser.areas) && currentUser.areas.indexOf('admin') !== -1); }
+function canEditShared(){
+  if (isAdminUser()) return true;
+  const mine = _userEmails(currentUser);
+  return SHARED_EDITOR_EMAILS.some(e => mine.indexOf(e) !== -1);
+}
+function requireSharedEdit(){
+  if (canEditShared()) return true;
+  alert('Este módulo es de solo lectura para tu usuario. La edición está reservada al responsable (ealfonzo@yamaha-motor.com.ar).');
+  return false;
 }
 
 function renderRoleBadge() {
@@ -1933,17 +1979,17 @@ const STORAGE = {
   tickets: 'gg_tickets_v1',
   fixedTasks: 'gg_fixed_tasks_v1'
 };
-// Keys whose data is PER-PROFILE (scoped by role). Others are shared.
+// Claves cuyos datos son PERSONALES (scope por usuario / ZE). El resto es compartido.
+// Compartidos: Concesionarios, Recall, Capacitaciones y Biblioteca.
 const PER_PROFILE_KEYS = [
-  'gg_activities_v1','gg_counter_v1',
-  'gg_trips_v1','gg_trip_visits_v1','gg_trip_expenses_v1','gg_trip_places_v1','gg_trip_participants_v1',
-  'gg_trainings_v1','gg_objectives_v1','gg_training_participants_v1','gg_training_areas_v1','gg_training_topics_v1','gg_training_materials_v1',
-  'gg_library_v1','gg_library_categories_v1','gg_library_favorites_v1',
-  'gg_fixed_tasks_v1'
+  'gg_activities_v1','gg_counter_v1','gg_cases_v1','gg_objectives_v1','gg_fixed_tasks_v1',
+  'gg_trips_v1','gg_trip_visits_v1','gg_trip_expenses_v1','gg_trip_places_v1','gg_trip_participants_v1'
 ];
 function scopedKey(k) {
-  if (typeof currentRole !== 'undefined' && currentRole && currentRole !== 'admin' && PER_PROFILE_KEYS.indexOf(k) !== -1) {
-    return k + '__role_' + currentRole;
+  // Datos personales: una bandeja por USUARIO (ZE). El resto (Concesionarios,
+  // Recall, Capacitaciones, Biblioteca) queda compartido en la clave base.
+  if (PER_PROFILE_KEYS.indexOf(k) !== -1 && typeof currentUser !== 'undefined' && currentUser && currentUser.ze) {
+    return k + '__user_' + currentUser.ze;
   }
   return k;
 }
@@ -2171,6 +2217,25 @@ function toggleTeamViewMember(ze) {
   renderDashboard();
 }
 
+// Etiqueta para identificar de un vistazo si una tarea es propia, asignada a otro,
+// asignada a mí por alguien, o compartida (estoy "al tanto").
+function activityShareBadge(a) {
+  if (!currentUser) return '';
+  const me = currentUser.ze;
+  const nm = ze => { const u = (typeof findUserByZE === 'function') ? findUserByZE(ze) : null; return u ? (u.firstname || u.ze) : ze; };
+  if (a.assignee && a.assignee !== me && a.owner === me) {
+    return '<span class="bdg" style="background:#DBEAFE;color:#1E40AF;" title="Se la asignaste a '+esc(nm(a.assignee))+'">→ '+esc(nm(a.assignee))+'</span>';
+  }
+  if (a.assignee === me && a.owner && a.owner !== me) {
+    if (a.assignStatus === 'Pendiente') return '<span class="bdg" style="background:#FEF3C7;color:#92400E;">Para aceptar</span>';
+    return '<span class="bdg" style="background:#DCFCE7;color:#166534;" title="Te la asignó '+esc(nm(a.owner))+'">Para mí · '+esc(nm(a.owner))+'</span>';
+  }
+  if (Array.isArray(a.watchers) && a.watchers.indexOf(me) !== -1 && a.owner !== me && a.assignee !== me) {
+    return '<span class="bdg" style="background:var(--bg-page);color:var(--text-muted);">Compartida</span>';
+  }
+  return '';
+}
+
 function renderTeamFilter() {
   const box = document.getElementById('dash-team-filter');
   if (!box) return;
@@ -2310,7 +2375,7 @@ function renderDayList() {
   list.innerHTML = acts.map(a => {
     const sb = a.status === 'Hecho' ? 'bdg-done' : a.status === 'En curso' ? 'bdg-prog' : a.status === 'Cancelada' ? 'bdg-canc' : 'bdg-pend';
     const cb = a.country === 'ARG' ? 'bdg-arg' : a.country === 'UY' ? 'bdg-uy' : 'bdg-amb';
-    return '<div class="day-item"><div class="day-time">'+(a.time||'—')+'</div><div class="day-info"><div class="day-title">'+esc(a.title)+'</div><div class="day-meta">'+esc(a.type)+(a.duration?' · '+a.duration+' min':'')+(a.due?' · ⏰ vence '+a.due:'')+(a.notes?' · '+esc(a.notes.slice(0,40)):'')+'</div></div><div class="day-actions">'+(a.priority==='Alta'?'<span class="bdg" style="background:#FEE2E2;color:#B91C1C;">Alta</span>':a.priority==='Baja'?'<span class="bdg" style="background:var(--bg-page);color:var(--text-muted);">Baja</span>':'')+'<span class="bdg '+cb+'">'+a.country+'</span><span class="bdg '+sb+'">'+a.status+'</span><button class="btn btn-ghost btn-icon" onclick="openActivityModal(\''+a.id+'\')">✎</button></div></div>';
+    return '<div class="day-item"><div class="day-time">'+(a.time||'—')+'</div><div class="day-info"><div class="day-title">'+esc(a.title)+'</div><div class="day-meta">'+esc(a.type)+(a.duration?' · '+a.duration+' min':'')+(a.due?' · ⏰ vence '+a.due:'')+(a.notes?' · '+esc(a.notes.slice(0,40)):'')+'</div></div><div class="day-actions">'+activityShareBadge(a)+(a.priority==='Alta'?'<span class="bdg" style="background:#FEE2E2;color:#B91C1C;">Alta</span>':a.priority==='Baja'?'<span class="bdg" style="background:var(--bg-page);color:var(--text-muted);">Baja</span>':'')+'<span class="bdg '+cb+'">'+a.country+'</span><span class="bdg '+sb+'">'+a.status+'</span><button class="btn btn-ghost btn-icon" onclick="openActivityModal(\''+a.id+'\')">✎</button></div></div>';
   }).join('');
 }
 
@@ -2560,7 +2625,7 @@ function renderPanel() {
   if (team.length > 0) {
     const assigned = activities.filter(a => a.assignedBy === ze && a.assignee && a.assignee !== ze);
     h += '<div class="card" style="margin-bottom:16px;">';
-    h += '<div class="card-h"><div class="card-title">📤 Tareas asignadas a mi equipo</div></div>';
+    h += '<div class="card-h"><div class="card-title">🤝 Tareas compartidas</div></div>';
     if (assigned.length === 0) {
       h += '<div style="font-size:12px;color:var(--text-muted);padding:8px 0;">Todavía no asignaste tareas. Usá "+ Asignar tarea".</div>';
     } else {
@@ -3156,6 +3221,11 @@ function openActivityModal(id) {
     document.getElementById('act-notes').value = '';
   }
   const _aObj = id ? activities.find(x => x.id === id) : null;
+  const _ss = document.getElementById('act-share-status');
+  if (_ss) {
+    const _b = _aObj ? activityShareBadge(_aObj) : '';
+    if (_b) { _ss.innerHTML = _b; _ss.style.display = 'block'; } else { _ss.innerHTML = ''; _ss.style.display = 'none'; }
+  }
   populateActTeamFields(_aObj);
   document.getElementById('modal-activity').classList.add('active');
 }
@@ -3633,6 +3703,7 @@ function populateNdLocalities() {
   document.getElementById('nd-custom-locality-row').style.display = 'none';
 }
 function saveNewDealer() {
+  if (!requireSharedEdit()) return;
   const name = document.getElementById('nd-name').value.trim();
   if (!name) { alert('Nombre obligatorio'); return; }
   const code = document.getElementById('nd-code').value.trim() || ('NEW'+Date.now());
@@ -3709,6 +3780,7 @@ function toggleDealerGrouping() {
 }
 
 function renderDealers() {
+  { const _b=document.getElementById('dlr-new-btn'); if(_b) _b.style.display = canEditShared()?'':'none'; }
   // Populate zone filter once
   const zoneFilterEl = document.getElementById('dlr-filter-zone');
   if (zoneFilterEl && zoneFilterEl.options.length <= 1) {
@@ -4686,6 +4758,7 @@ function setCalif(val) {
 }
 
 function saveDealer() {
+  if (!requireSharedEdit()) return;
   const d = DEALERS[editingDealerIdx];
   const p = dealerProfiles[d.code] || {};
   // Persist the currently active sales point from the form
@@ -4859,6 +4932,7 @@ function getRecallStatus(r) {
 }
 
 function setRecallConfirmation(recallId, code, checked) {
+  if (!requireSharedEdit()) return;
   const r = recalls.find(x => x.id === recallId);
   if (!r) return;
   if (!r.confirmations) r.confirmations = {};
@@ -5062,6 +5136,7 @@ function renderRecallMonthlyBlock(recallId, fromISO, toISO) {
 }
 
 function notifyDealerByMail(recallId, code) {
+  if (!requireSharedEdit()) return;
   const r = recalls.find(x => x.id === recallId);
   if (!r) return;
   const dlr = DEALERS.find(d => d.code === code);
@@ -5139,6 +5214,7 @@ function getRecallDealerStatus(r, d) {
 }
 
 function setRecallNotification(recallId, code, date) {
+  if (!requireSharedEdit()) return;
   const r = recalls.find(x => x.id === recallId);
   if (!r) return;
   if (!r.notifications) r.notifications = {};
@@ -5182,6 +5258,7 @@ function openRecallUnitModal(recallId, chassis) {
 }
 
 function saveRecallUnit() {
+  if (!requireSharedEdit()) return;
   if (!_editingRecallUnit) return;
   const r = recalls.find(x => x.id === _editingRecallUnit.recallId);
   if (!r) return;
@@ -5220,6 +5297,7 @@ function saveRecallUnit() {
 }
 
 function deleteRecallUnit() {
+  if (!requireSharedEdit()) return;
   if (!_editingRecallUnit) return;
   if (!confirm('¿Eliminar el servicio de esta unidad? Quedará como pendiente (no se borra la unidad de la campaña).')) return;
   const r = recalls.find(x => x.id === _editingRecallUnit.recallId);
@@ -5239,6 +5317,7 @@ function deleteRecallUnit() {
 }
 
 function deleteRecallUnitCompletely() {
+  if (!requireSharedEdit()) return;
   if (!_editingRecallUnit) return;
   if (!confirm('¿Eliminar esta unidad COMPLETAMENTE de la campaña? Esta acción no se puede deshacer.')) return;
   const r = recalls.find(x => x.id === _editingRecallUnit.recallId);
@@ -5358,6 +5437,7 @@ function networkMailMailto() {
 }
 
 function renderRecalls() {
+  { const _b=document.getElementById('recall-new-btn'); if(_b) _b.style.display = canEditShared()?'':'none'; }
   const c = document.getElementById('recall-container');
   const det = document.getElementById('recall-detail');
   det.style.display = 'none';
@@ -5524,6 +5604,7 @@ function openRecallModal(id) {
 }
 
 function saveRecall() {
+  if (!requireSharedEdit()) return;
   const name = document.getElementById('rc-name').value.trim();
   if (!name) { alert('Nombre obligatorio'); return; }
   const existing = editingRecallId ? recalls.find(r => r.id === editingRecallId) : null;
@@ -5543,7 +5624,7 @@ function saveRecall() {
   if (document.getElementById('recall-detail').style.display !== 'none') openRecallDetail(obj.id);
   else renderRecalls();
 }
-function deleteRecall() { if (!confirm('¿Eliminar campaña?')) return; recalls = recalls.filter(r => r.id !== editingRecallId); save(STORAGE.recalls, recalls); closeModal('modal-recall'); renderRecalls(); }
+function deleteRecall() { if (!requireSharedEdit()) return; if (!confirm('¿Eliminar campaña?')) return; recalls = recalls.filter(r => r.id !== editingRecallId); save(STORAGE.recalls, recalls); closeModal('modal-recall'); renderRecalls(); }
 
 // ============ VISITS ============
 function renderVisits() {
