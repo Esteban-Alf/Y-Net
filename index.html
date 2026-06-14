@@ -198,8 +198,11 @@ textarea{resize:vertical;min-height:60px;}
   .sidebar{position:fixed;left:-230px;z-index:50;transition:left .2s;box-shadow:2px 0 12px rgba(0,0,0,0.2);}
   .sidebar.open{left:0;}
   .menu-toggle{display:flex !important;}
-  .ph{padding:14px 14px 0;flex-wrap:wrap;}
-  .ph-title{font-size:20px;}
+  .main{padding-top:46px;}
+  .ph{padding:10px 14px 0;flex-wrap:wrap;}
+  .ph-title{font-size:19px;}
+  .ph-actions{flex-wrap:wrap;width:100%;margin-top:8px;}
+  .ph-actions .btn{flex:1 1 auto;justify-content:center;}
   .content{padding:14px;}
   .field-row{grid-template-columns:1fr;}
   .kpi-grid{grid-template-columns:repeat(2,1fr);gap:8px;}
@@ -218,8 +221,14 @@ textarea{resize:vertical;min-height:60px;}
   .cal-line-text{display:none;}
   .tbl{font-size:12px;}
   .tbl th,.tbl td{padding:8px 10px;}
-  .modal{padding:18px 18px;border-radius:10px;}
+  .modal{padding:18px 18px;border-radius:10px;max-width:94vw;}
+  .modal-bg{padding:10px;}
   .vincular-sig{padding:10px 14px;}
+  .table-wrap,.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+}
+@media (max-width:420px){
+  .kpi-grid{grid-template-columns:1fr 1fr;}
+  .cnt-stats{grid-template-columns:1fr 1fr 1fr;}
 }
 .menu-toggle{display:none;background:#1A1A1A;color:#fff;border:none;width:38px;height:38px;border-radius:6px;align-items:center;justify-content:center;cursor:pointer;font-size:18px;position:fixed;top:10px;left:10px;z-index:60;box-shadow:0 2px 6px rgba(0,0,0,0.2);}
 
@@ -1689,6 +1698,9 @@ function reloadRoleScopedState() {
   if (!libraryCategories || libraryCategories.length === 0) { libraryCategories = DEFAULT_LIB_CATEGORIES.slice(); save(STORAGE.libraryCategories, libraryCategories); }
   // Atribuir datos viejos sin dueño al dueño primario (para que no aparezcan en el calendario de otros)
   stampLegacyOwnership();
+  // Cuantificador y tipos de actividad: por usuario
+  try { const s = JSON.parse(localStorage.getItem(scopedKey('gg_cnt_types_v1'))||'null'); CNT_TYPES = (s&&Array.isArray(s)&&s.length>0)?s:JSON.parse(JSON.stringify(DEFAULT_CNT_TYPES)); } catch(e){ CNT_TYPES = JSON.parse(JSON.stringify(DEFAULT_CNT_TYPES)); }
+  try { const s = JSON.parse(localStorage.getItem(scopedKey('gg_act_types_v1'))||'null'); actTypes = (s&&Array.isArray(s)&&s.length>0)?s:[...DEFAULT_ACT_TYPES]; } catch(e){ actTypes = [...DEFAULT_ACT_TYPES]; }
 }
 
 
@@ -2084,7 +2096,7 @@ const STORAGE = {
 // Compartidos: Concesionarios, Recall, Capacitaciones y Biblioteca.
 const PER_PROFILE_KEYS = [
   'gg_activities_v1','gg_counter_v1','gg_cases_v1','gg_objectives_v1','gg_fixed_tasks_v1',
-  'gg_panel_tasks_v1','gg_panel_tags_v1',
+  'gg_panel_tasks_v1','gg_panel_tags_v1','gg_cnt_types_v1','gg_act_types_v1',
   'gg_trips_v1','gg_trip_visits_v1','gg_trip_expenses_v1','gg_trip_places_v1','gg_trip_participants_v1'
 ];
 function scopedKey(k) {
@@ -2257,7 +2269,7 @@ try {
   if (saved && Array.isArray(saved) && saved.length > 0) CNT_TYPES = saved;
   else CNT_TYPES = JSON.parse(JSON.stringify(DEFAULT_CNT_TYPES));
 } catch(e) { CNT_TYPES = JSON.parse(JSON.stringify(DEFAULT_CNT_TYPES)); }
-function saveCntTypes() { localStorage.setItem('gg_cnt_types_v1', JSON.stringify(CNT_TYPES)); }
+function saveCntTypes() { localStorage.setItem(scopedKey('gg_cnt_types_v1'), JSON.stringify(CNT_TYPES)); }
 
 let calMonth = new Date().getMonth();
 let calYear = new Date().getFullYear();
@@ -2676,7 +2688,7 @@ try {
   const saved = JSON.parse(localStorage.getItem('gg_act_types_v1') || 'null');
   actTypes = (saved && Array.isArray(saved) && saved.length > 0) ? saved : [...DEFAULT_ACT_TYPES];
 } catch(e) { actTypes = [...DEFAULT_ACT_TYPES]; }
-function saveActTypes() { localStorage.setItem('gg_act_types_v1', JSON.stringify(actTypes)); }
+function saveActTypes() { localStorage.setItem(scopedKey('gg_act_types_v1'), JSON.stringify(actTypes)); }
 function populateActTypeSelect(selId, current) {
   const sel = document.getElementById(selId);
   sel.innerHTML = actTypes.map(t => '<option value="'+esc(t)+'">'+esc(t)+'</option>').join('');
