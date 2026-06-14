@@ -443,8 +443,8 @@ textarea{resize:vertical;min-height:60px;}
 
   <!-- PANEL DE CONTROL -->
   <div class="page" id="page-panel">
-    <div class="ph"><div><div class="ph-title">Panel de control</div><div class="ph-sub">Centro de actividades del equipo</div></div>
-      <div class="ph-actions"><button class="btn btn-ghost btn-sm" onclick="openFixedTaskModal()">+ Tarea fija mensual</button><button class="btn btn-primary btn-sm" onclick="openActivityModal()">+ Asignar tarea</button></div>
+    <div class="ph"><div><div class="ph-title">Panel de control</div><div class="ph-sub">Tablero de tareas y seguimiento</div></div>
+      <div class="ph-actions"><button class="btn btn-primary btn-sm" onclick="openPanelTaskModal()">+ Nueva tarea</button></div>
     </div>
     <div class="content"><div id="panel-container"></div></div>
   </div>
@@ -1178,6 +1178,51 @@ textarea{resize:vertical;min-height:60px;}
   </div>
 </div>
 
+<!-- PANEL TASK MODAL -->
+<div class="modal-bg" id="modal-panel-task" style="z-index:300;">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-h"><div class="modal-title" id="pt-modal-title">Nueva tarea</div><button class="modal-close" onclick="closeModal('modal-panel-task')">×</button></div>
+    <div class="field"><label>Nombre de la tarea *</label><input type="text" id="pt-name" placeholder="Ej: Revisar reclamos pendientes"></div>
+    <div class="field"><label>Descripción</label><textarea id="pt-desc" rows="2" placeholder="Detalle de la tarea..."></textarea></div>
+    <div class="field-row">
+      <div class="field"><label>Estado</label><select id="pt-status"><option>Pendiente</option><option>En curso</option><option>Completado</option></select></div>
+      <div class="field"><label>Prioridad</label><select id="pt-priority"><option>Urgente</option><option>Alta</option><option selected>Normal</option><option>Baja</option></select></div>
+    </div>
+    <div class="field"><label>Fecha de cierre</label><input type="date" id="pt-due"></div>
+    <div class="field"><label>Personas involucradas</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px;">
+        <select id="pt-collab-select" style="flex:1;min-width:160px;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:6px;"></select>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="ptAddCollaborator()">+ Agregar</button>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+        <input type="text" id="pt-free-name" placeholder="Otra persona (no está en el sistema)" style="flex:1;min-width:160px;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:6px;">
+        <button class="btn btn-ghost btn-sm" type="button" onclick="ptAddFreePerson()">+ Agregar</button>
+      </div>
+      <div id="pt-involved-list"></div>
+    </div>
+    <div class="field"><label>Etiquetas</label>
+      <div id="pt-tags-list" style="margin-bottom:6px;"></div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input type="text" id="pt-newtag" placeholder="Crear nueva etiqueta" style="flex:1;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:6px;">
+        <button class="btn btn-ghost btn-sm" type="button" onclick="ptAddNewTag()">+ Crear</button>
+      </div>
+    </div>
+    <div class="field"><label>Evidencia (archivos)</label>
+      <input type="file" id="pt-evidence-file" multiple onchange="ptHandleEvidence(this)" style="font-size:12.5px;">
+      <div id="pt-evidence-list" style="margin-top:6px;"></div>
+    </div>
+    <div class="field" style="background:var(--bg-page);border-radius:8px;padding:10px 12px;">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;"><input type="checkbox" id="pt-calendar" onchange="ptToggleCalendar()" style="width:16px;height:16px;"> Añadir al calendario del dashboard</label>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Solo las tareas que marques acá aparecen en el calendario (usa la fecha de cierre).</div>
+      <div id="pt-cal-time-wrap" style="margin-top:8px;display:none;">
+        <label style="font-size:11.5px;color:var(--text-muted);">Horario a mostrar</label><br>
+        <input type="time" id="pt-cal-time" style="font-size:13px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;">
+      </div>
+    </div>
+    <div class="modal-actions"><div style="flex:1;"></div><button class="btn btn-ghost" onclick="closeModal('modal-panel-task')">Cancelar</button><button class="btn btn-primary" onclick="savePanelTask()">Guardar tarea</button></div>
+  </div>
+</div>
+
 <!-- USER MODAL -->
 <div class="modal-bg" id="modal-user" style="z-index:300;">
   <div class="modal" style="max-width:520px;">
@@ -1635,6 +1680,9 @@ function reloadRoleScopedState() {
   libraryCategories = load(STORAGE.libraryCategories);
   libraryFavorites = load(STORAGE.libraryFavorites);
   fixedTasks = load(STORAGE.fixedTasks);
+  panelTasks = load(STORAGE.panelTasks);
+  panelTags = load(STORAGE.panelTags);
+  if (!panelTags || panelTags.length === 0) { panelTags = DEFAULT_PANEL_TAGS.slice(); save(STORAGE.panelTags, panelTags); }
   // Re-init defaults if empty (training areas/topics, library categories)
   if (!trainingAreas || trainingAreas.length === 0) { trainingAreas = ['Garantías']; save(STORAGE.trainingAreas, trainingAreas); }
   if (!trainingTopics || trainingTopics.length === 0) { trainingTopics = DEFAULT_GG_TOPICS.slice(); save(STORAGE.trainingTopics, trainingTopics); }
@@ -2028,12 +2076,15 @@ const STORAGE = {
   supportChats: 'gg_support_chats_v1',
   comunicados: 'gg_comunicados_v1',
   tickets: 'gg_tickets_v1',
-  fixedTasks: 'gg_fixed_tasks_v1'
+  fixedTasks: 'gg_fixed_tasks_v1',
+  panelTasks: 'gg_panel_tasks_v1',
+  panelTags: 'gg_panel_tags_v1'
 };
 // Claves cuyos datos son PERSONALES (scope por usuario / ZE). El resto es compartido.
 // Compartidos: Concesionarios, Recall, Capacitaciones y Biblioteca.
 const PER_PROFILE_KEYS = [
   'gg_activities_v1','gg_counter_v1','gg_cases_v1','gg_objectives_v1','gg_fixed_tasks_v1',
+  'gg_panel_tasks_v1','gg_panel_tags_v1',
   'gg_trips_v1','gg_trip_visits_v1','gg_trip_expenses_v1','gg_trip_places_v1','gg_trip_participants_v1'
 ];
 function scopedKey(k) {
@@ -2121,6 +2172,8 @@ let supportChats = JSON.parse(localStorage.getItem('gg_support_chats_v1') || '[]
 let comunicados = JSON.parse(localStorage.getItem('gg_comunicados_v1') || '[]');
 let tickets = JSON.parse(localStorage.getItem('gg_tickets_v1') || '[]');
 let fixedTasks = load(STORAGE.fixedTasks);
+let panelTasks = load(STORAGE.panelTasks);
+let panelTags = load(STORAGE.panelTags);
 function saveSupportChats() { localStorage.setItem('gg_support_chats_v1', JSON.stringify(supportChats)); }
 function saveComunicados() { localStorage.setItem('gg_comunicados_v1', JSON.stringify(comunicados)); }
 function saveTickets() { localStorage.setItem('gg_tickets_v1', JSON.stringify(tickets)); }
@@ -2340,6 +2393,19 @@ function getActivitiesOn(dateStr) {
         date: t.date, time: t.time || '', duration: t.duration || 60,
         status: t.status === 'Realizada' ? 'Hecho' : t.status === 'Cancelada' ? 'Cancelada' : 'Pendiente',
         notes: t.notes || ''
+      });
+    }
+  });
+  // Tareas del Panel marcadas "añadir al calendario" (por usuario)
+  (panelTasks || []).forEach(t => {
+    if (t.inCalendar && t.dueDate === dateStr) {
+      if (currentUser && t.owner && t.owner !== currentUser.ze && _teamViewMembers.indexOf(t.owner) === -1) return;
+      out.push({
+        id: 'pt-'+t.id, virtual:'paneltask', refId:t.id,
+        title: t.name, type: 'Tarea', country: t.priority || '',
+        date: t.dueDate, time: t.calTime || '', duration: 0,
+        status: t.status === 'Completado' ? 'Hecho' : t.status === 'En curso' ? 'En curso' : 'Pendiente',
+        notes: t.description || ''
       });
     }
   });
@@ -2645,16 +2711,30 @@ function removeActType(i) {
 
 
 // ============ PANEL DE CONTROL (centro de actividades) ============
+// ── Panel de control · Tablero de tareas (estilo ClickUp) ──
+const DEFAULT_PANEL_TAGS = [
+  { id:'t_garantia', name:'Garantía', color:'#E60012' },
+  { id:'t_postventa', name:'Postventa', color:'#1E40AF' },
+  { id:'t_admin', name:'Administrativo', color:'#6D28D9' },
+  { id:'t_red', name:'Red', color:'#047857' },
+  { id:'t_personal', name:'Personal', color:'#92400E' }
+];
+const PANEL_PRIORITIES = ['Urgente','Alta','Normal','Baja'];
+function panelPriorityColor(p){ return p==='Urgente'?{bg:'#FEE2E2',tx:'#B91C1C'}:p==='Alta'?{bg:'#FFEDD5',tx:'#9A3412'}:p==='Baja'?{bg:'#F3F4F6',tx:'#4B5563'}:{bg:'#DBEAFE',tx:'#1E40AF'}; }
+function panelStatusColor(st){ return st==='Completado'?{bg:'#D1FAE5',tx:'#065F46'}:st==='En curso'?{bg:'#EDE9FE',tx:'#6D28D9'}:{bg:'#F3F4F6',tx:'#374151'}; }
+function panelTagById(id){ return (panelTags||[]).find(x => x.id === id); }
+
+let _panelFilterMonth = '';
+let _panelFilterStatus = '';
+let _panelFilterTag = '';
+
 function renderPanel() {
   const c = document.getElementById('panel-container');
   if (!c) return;
   const ze = currentUser ? currentUser.ze : '';
-  const now = new Date();
-  const monthStr = now.toISOString().slice(0,7);
-
   let h = '';
 
-  // ── 1. Solicitudes de tarea pendientes (asignadas a mí) ──
+  // Solicitudes de tarea pendientes (asignadas a mí desde actividades) — se mantiene
   const myPending = activities.filter(a => a.assignee === ze && a.assignStatus === 'Pendiente');
   if (myPending.length > 0) {
     h += '<div class="card" style="margin-bottom:16px;border-left:3px solid var(--primary);">';
@@ -2663,133 +2743,262 @@ function renderPanel() {
       const by = findUserByZE(a.assignedBy);
       h += '<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;">';
       h += '<div style="font-weight:600;font-size:13.5px;margin-bottom:3px;">'+esc(a.title)+'</div>';
-      h += '<div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px;">Asignada por '+esc(by?userFullName(by):'—')+' · '+(a.date||'')+(a.type?' · '+esc(a.type):'')+'</div>';
+      h += '<div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px;">Asignada por '+esc(by?userFullName(by):'—')+' · '+(a.date||'')+'</div>';
       if (a.notes) h += '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">'+esc(a.notes)+'</div>';
-      h += '<div style="display:flex;gap:6px;">';
-      h += '<button class="btn btn-primary btn-sm" onclick="respondTask(\''+a.id+'\',true)">✓ Aceptar</button>';
-      h += '<button class="btn btn-ghost btn-sm" onclick="respondTask(\''+a.id+'\',false)" style="color:var(--primary);">✕ Rechazar</button>';
-      h += '</div></div>';
+      h += '<div style="display:flex;gap:6px;"><button class="btn btn-primary btn-sm" onclick="respondTask(\''+a.id+'\',true)">✓ Aceptar</button>';
+      h += '<button class="btn btn-ghost btn-sm" onclick="respondTask(\''+a.id+'\',false)" style="color:var(--primary);">✕ Rechazar</button></div></div>';
     });
     h += '</div>';
   }
 
-  // ── 2. Tareas que asigné y su seguimiento (si tengo equipo) ──
-  const team = getMyTeamMembers();
-  if (team.length > 0) {
-    const assigned = activities.filter(a => a.assignedBy === ze && a.assignee && a.assignee !== ze);
-    h += '<div class="card" style="margin-bottom:16px;">';
-    h += '<div class="card-h"><div class="card-title">🤝 Tareas compartidas</div></div>';
-    if (assigned.length === 0) {
-      h += '<div style="font-size:12px;color:var(--text-muted);padding:8px 0;">Todavía no asignaste tareas. Usá "+ Asignar tarea".</div>';
-    } else {
-      assigned.slice().sort((a,b)=>(b.assignedAt||'').localeCompare(a.assignedAt||'')).forEach(a => {
-        const m = findUserByZE(a.assignee);
-        const stColor = a.assignStatus === 'Rechazada' ? {bg:'#FEE2E2',tx:'#991B1B'} : a.assignStatus === 'Aceptada' ? {bg:'#D1FAE5',tx:'#065F46'} : {bg:'#FEF3C7',tx:'#92400E'};
-        const prog = a.progress || 'Por hacer';
-        const progColor = prog === 'Aprobada' ? {bg:'#D1FAE5',tx:'#065F46'} : prog === 'Hecha' ? {bg:'#DBEAFE',tx:'#1E40AF'} : prog === 'En curso' ? {bg:'#EDE9FE',tx:'#6D28D9'} : {bg:'#F3F4F6',tx:'#374151'};
-        h += '<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
-        h += '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">';
-        h += '<div><div style="font-weight:600;font-size:13px;">'+esc(a.title)+'</div><div style="font-size:11px;color:var(--text-muted);">'+esc(userFullName(m))+' · '+(a.date||'')+'</div></div>';
-        h += '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;"><span class="bdg" style="background:'+stColor.bg+';color:'+stColor.tx+';">'+(a.assignStatus||'—')+'</span><span class="bdg" style="background:'+progColor.bg+';color:'+progColor.tx+';">'+prog+'</span></div>';
-        h += '</div>';
-        // Approve button when member marked it Hecha
-        if (prog === 'Hecha') {
-          h += '<div style="margin-top:8px;"><button class="btn btn-primary btn-sm" onclick="approveTask(\''+a.id+'\')">✓ Aprobar tarea</button></div>';
-        }
-        h += '</div>';
-      });
-    }
-    h += '</div>';
-  }
+  // KPIs del mes
+  h += renderPanelKpis();
+  // Filtros
+  h += renderPanelFilters();
 
-  // ── 3. Mis tareas en curso (asignadas a mí, aceptadas) ──
-  const myTasks = activities.filter(a => a.assignee === ze && a.assignStatus === 'Aceptada' && a.progress !== 'Aprobada');
-  if (myTasks.length > 0) {
-    h += '<div class="card" style="margin-bottom:16px;">';
-    h += '<div class="card-h"><div class="card-title">📋 Mis tareas asignadas</div></div>';
-    myTasks.forEach(a => {
-      const prog = a.progress || 'Por hacer';
-      h += '<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
-      h += '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">'+esc(a.title)+'</div>';
-      h += '<div style="display:flex;gap:6px;align-items:center;"><label style="font-size:11.5px;color:var(--text-muted);">Avance:</label>';
-      h += '<select onchange="updateTaskProgress(\''+a.id+'\',this.value)" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:5px;">';
-      ['Por hacer','En curso','Hecha'].forEach(p => { h += '<option '+(prog===p?'selected':'')+'>'+p+'</option>'; });
-      h += '</select>';
-      if (prog === 'Hecha') h += '<span style="font-size:11px;color:var(--text-muted);">Esperando aprobación del líder</span>';
-      h += '</div></div>';
-    });
-    h += '</div>';
-  }
-
-  // ── 4. Tareas fijas mensuales ──
-  h += '<div class="card" style="margin-bottom:16px;">';
-  h += '<div class="card-h"><div class="card-title">📌 Tareas fijas mensuales · '+now.toLocaleDateString('es-AR',{month:'long',year:'numeric'})+'</div></div>';
-  if (fixedTasks.length === 0) {
-    h += '<div style="font-size:12px;color:var(--text-muted);padding:8px 0;">Sin tareas fijas. Agregá las recurrentes (statement, capacitaciones, etc.) con "+ Tarea fija mensual".</div>';
+  // Tablero
+  const tasks = getFilteredPanelTasks();
+  h += '<div class="card">';
+  h += '<div class="card-h"><div class="card-title">✓ Mis tareas ('+tasks.length+')</div></div>';
+  if (tasks.length === 0) {
+    h += '<div style="font-size:12.5px;color:var(--text-muted);padding:14px 4px;text-align:center;">No hay tareas con estos filtros. Creá una con "+ Nueva tarea".</div>';
   } else {
-    fixedTasks.forEach(ft => {
-      const done = (ft.completions||{})[monthStr];
-      const approved = (ft.approvals||{})[monthStr];
-      h += '<div style="display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;">';
-      h += '<input type="checkbox" '+(done?'checked':'')+' onchange="toggleFixedTask(\''+ft.id+'\')" style="width:17px;height:17px;flex-shrink:0;">';
-      h += '<div style="flex:1;"><div style="font-weight:600;font-size:13px;'+(done?'text-decoration:line-through;color:var(--text-muted);':'')+'">'+esc(ft.title)+'</div>';
-      if (ft.desc) h += '<div style="font-size:11px;color:var(--text-muted);">'+esc(ft.desc)+'</div>';
-      h += '</div>';
-      if (done && !approved) h += '<span class="bdg" style="background:#FEF3C7;color:#92400E;">Pend. aprobación</span>';
-      if (approved) h += '<span class="bdg" style="background:#D1FAE5;color:#065F46;">✓ Aprobada</span>';
-      // Leader (supervisor) can approve
-      const sups = getMySupervisors();
-      h += '<button class="btn btn-ghost btn-sm" onclick="deleteFixedTask(\''+ft.id+'\')" style="color:var(--primary);font-size:11px;">✕</button>';
-      h += '</div>';
-    });
-    // If I supervise people, show their fixed tasks pending approval
+    tasks.forEach(t => h += renderPanelTaskRow(t));
   }
   h += '</div>';
-
-  // ── 5. KPIs mensuales ──
-  h += renderMonthlyKpis(monthStr);
 
   c.innerHTML = h;
 }
 
-function renderMonthlyKpis(monthStr) {
-  // Consultas by category this month
-  const monthLog = counterLog.filter(e => (e.ts||'').slice(0,7) === monthStr);
-  const byCat = {};
-  (typeof CNT_TYPES !== 'undefined' ? CNT_TYPES : []).forEach(t => byCat[t.id] = {label:t.label, count:0});
-  monthLog.forEach(e => { if (byCat[e.type]) byCat[e.type].count++; });
-
+function renderPanelKpis() {
+  const all = (panelTasks||[]);
+  const total = all.length;
+  const pend = all.filter(t => t.status === 'Pendiente').length;
+  const curso = all.filter(t => t.status === 'En curso').length;
+  const done = all.filter(t => t.status === 'Completado').length;
+  const urg = all.filter(t => t.status !== 'Completado' && t.priority === 'Urgente').length;
   let h = '<div class="card" style="margin-bottom:16px;">';
   h += '<div class="card-h"><div class="card-title">📊 KPIs del mes</div></div>';
-
-  // Consultas
-  h += '<div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin:4px 0 8px;">Consultas por categoría ('+monthLog.length+' total)</div>';
-  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">';
-  Object.keys(byCat).forEach(k => {
-    if (byCat[k].count > 0 || true) h += '<div style="background:var(--bg-page);border-radius:8px;padding:8px 12px;min-width:80px;"><div style="font-size:11px;color:var(--text-muted);">'+esc(byCat[k].label)+'</div><div style="font-size:18px;font-weight:700;">'+byCat[k].count+'</div></div>';
-  });
-  h += '</div>';
-
-  // Tareas fijas cumplidas
-  const totalFixed = fixedTasks.length;
-  const doneFixed = fixedTasks.filter(ft => (ft.completions||{})[monthStr]).length;
-  // Otros indicadores
-  const trainingsMonth = trainings.filter(t => (t.date||'').slice(0,7) === monthStr).length;
-  const tripsMonth = trips.filter(t => (t.startDate||t.date||'').slice(0,7) === monthStr).length;
-  const recallActive = (typeof recalls !== 'undefined' ? recalls.length : 0);
-
   h += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
-  h += monthlyKpiBox('Tareas fijas', doneFixed+'/'+totalFixed, '#6D28D9');
-  h += monthlyKpiBox('Capacitaciones', trainingsMonth, '#1E40AF');
-  h += monthlyKpiBox('Viajes', tripsMonth, '#047857');
-  h += monthlyKpiBox('Recall activos', recallActive, '#E60012');
-  h += '</div>';
-  h += '</div>';
+  h += monthlyKpiBox('Total tareas', total, '#374151');
+  h += monthlyKpiBox('Pendientes', pend, '#6B7280');
+  h += monthlyKpiBox('En curso', curso, '#6D28D9');
+  h += monthlyKpiBox('Completadas', done, '#047857');
+  h += monthlyKpiBox('Urgentes abiertas', urg, '#E60012');
+  h += '</div></div>';
   return h;
 }
 
+function renderPanelFilters() {
+  const months = Array.from(new Set((panelTasks||[]).map(t => (t.dueDate||'').slice(0,7)).filter(Boolean))).sort().reverse();
+  let h = '<div class="card" style="margin-bottom:16px;padding:12px 14px;">';
+  h += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">';
+  h += '<span style="font-size:11.5px;color:var(--text-muted);font-weight:600;">Filtros:</span>';
+  // Mes
+  h += '<select onchange="setPanelFilter(\'month\',this.value)" style="font-size:12px;padding:5px 9px;border:1px solid var(--border);border-radius:6px;">';
+  h += '<option value="">Todos los meses</option>';
+  months.forEach(m => { const d = new Date(m+'-01T00:00:00'); const lbl = d.toLocaleDateString('es-AR',{month:'long',year:'numeric'}); h += '<option value="'+m+'" '+(_panelFilterMonth===m?'selected':'')+'>'+lbl+'</option>'; });
+  h += '</select>';
+  // Estado
+  h += '<select onchange="setPanelFilter(\'status\',this.value)" style="font-size:12px;padding:5px 9px;border:1px solid var(--border);border-radius:6px;">';
+  ['','Pendiente','En curso','Completado'].forEach(st => { h += '<option value="'+st+'" '+(_panelFilterStatus===st?'selected':'')+'>'+(st||'Todos los estados')+'</option>'; });
+  h += '</select>';
+  // Etiqueta
+  h += '<select onchange="setPanelFilter(\'tag\',this.value)" style="font-size:12px;padding:5px 9px;border:1px solid var(--border);border-radius:6px;">';
+  h += '<option value="">Todas las etiquetas</option>';
+  (panelTags||[]).forEach(tg => { h += '<option value="'+tg.id+'" '+(_panelFilterTag===tg.id?'selected':'')+'>'+esc(tg.name)+'</option>'; });
+  h += '</select>';
+  if (_panelFilterMonth || _panelFilterStatus || _panelFilterTag) h += '<button class="btn btn-ghost btn-sm" onclick="clearPanelFilters()">Limpiar</button>';
+  h += '</div></div>';
+  return h;
+}
+
+function setPanelFilter(type, val){ if(type==='month')_panelFilterMonth=val; else if(type==='status')_panelFilterStatus=val; else if(type==='tag')_panelFilterTag=val; renderPanel(); }
+function clearPanelFilters(){ _panelFilterMonth=''; _panelFilterStatus=''; _panelFilterTag=''; renderPanel(); }
+
+function getFilteredPanelTasks() {
+  let list = (panelTasks||[]).slice();
+  if (_panelFilterMonth) list = list.filter(t => (t.dueDate||'').slice(0,7) === _panelFilterMonth);
+  if (_panelFilterStatus) list = list.filter(t => t.status === _panelFilterStatus);
+  if (_panelFilterTag) list = list.filter(t => (t.tags||[]).indexOf(_panelFilterTag) !== -1);
+  const stOrder = { 'En curso':0, 'Pendiente':1, 'Completado':2 };
+  const prOrder = { 'Urgente':0, 'Alta':1, 'Normal':2, 'Baja':3 };
+  list.sort((a,b) => (stOrder[a.status]-stOrder[b.status]) || (prOrder[a.priority]-prOrder[b.priority]) || (a.dueDate||'').localeCompare(b.dueDate||''));
+  return list;
+}
+
+function involvedLabel(p) {
+  if (!p) return '';
+  if (p.ze) { const u = findUserByZE(p.ze); return u ? userFullName(u) : p.ze; }
+  return p.name || '';
+}
+
+function renderPanelTaskRow(t) {
+  const pc = panelPriorityColor(t.priority);
+  const sc = panelStatusColor(t.status);
+  const today = new Date(); const todayStr = new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);
+  const overdue = t.dueDate && t.dueDate < todayStr && t.status !== 'Completado';
+  let h = '<div style="border:1px solid var(--border);border-left:3px solid '+pc.tx+';border-radius:8px;padding:11px 13px;margin-bottom:9px;'+(t.status==='Completado'?'opacity:.72;':'')+'">';
+  // top
+  h += '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">';
+  h += '<div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:13.5px;'+(t.status==='Completado'?'text-decoration:line-through;color:var(--text-muted);':'')+'">'+esc(t.name)+'</div>';
+  if (t.description) h += '<div style="font-size:11.5px;color:var(--text-muted);margin-top:2px;">'+esc(t.description.slice(0,120))+(t.description.length>120?'…':'')+'</div>';
+  h += '</div>';
+  h += '<div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">';
+  h += '<span class="bdg" style="background:'+pc.bg+';color:'+pc.tx+';">'+t.priority+'</span>';
+  h += '<button class="btn btn-ghost btn-icon" onclick="openPanelTaskModal(\''+t.id+'\')" style="font-size:12px;">✎</button>';
+  h += '<button class="btn btn-ghost btn-icon" onclick="deletePanelTask(\''+t.id+'\')" style="font-size:12px;color:var(--primary);">✕</button>';
+  h += '</div></div>';
+  // meta chips
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;">';
+  // estado (quick change)
+  h += '<select onchange="setPanelTaskStatus(\''+t.id+'\',this.value)" style="font-size:11px;padding:3px 7px;border:1px solid var(--border);border-radius:999px;background:'+sc.bg+';color:'+sc.tx+';font-weight:600;">';
+  ['Pendiente','En curso','Completado'].forEach(st => { h += '<option '+(t.status===st?'selected':'')+'>'+st+'</option>'; });
+  h += '</select>';
+  if (t.dueDate) h += '<span class="bdg" style="background:'+(overdue?'#FEE2E2':'var(--bg-page)')+';color:'+(overdue?'#B91C1C':'var(--text-muted)')+';">📅 '+t.dueDate+(overdue?' · vencida':'')+'</span>';
+  (t.tags||[]).forEach(tid => { const tg = panelTagById(tid); if (tg) h += '<span class="bdg" style="background:'+tg.color+'1A;color:'+tg.color+';">'+esc(tg.name)+'</span>'; });
+  (t.involved||[]).forEach(p => { h += '<span class="bdg" style="background:#EEF2FF;color:#3730A3;">👤 '+esc(involvedLabel(p))+'</span>'; });
+  if (t.evidence && t.evidence.length) h += '<span class="bdg" style="background:var(--bg-page);color:var(--text-muted);">📎 '+t.evidence.length+'</span>';
+  if (t.inCalendar) h += '<span class="bdg" style="background:#FEF3C7;color:#92400E;">🗓 En calendario</span>';
+  h += '</div></div>';
+  return h;
+}
+
+function setPanelTaskStatus(id, st) {
+  const t = panelTasks.find(x => x.id === id);
+  if (!t) return;
+  t.status = st;
+  save(STORAGE.panelTasks, panelTasks);
+  renderPanel();
+  if (t.inCalendar) renderDashboard();
+}
+
+function renderMonthlyKpis(monthStr) { return ''; }
+
 function monthlyKpiBox(label, value, color) {
   return '<div style="background:#fff;border:1px solid var(--border);border-left:3px solid '+color+';border-radius:8px;padding:10px 14px;min-width:110px;"><div style="font-size:11px;color:var(--text-muted);">'+label+'</div><div style="font-size:20px;font-weight:700;color:'+color+';">'+value+'</div></div>';
+}
+
+// ── Panel · alta y edición de tareas ──
+let editingPanelTaskId = null;
+let _ptInvolved = [];
+let _ptTags = [];
+let _ptEvidence = [];
+
+function openPanelTaskModal(id) {
+  editingPanelTaskId = id || null;
+  const t = id ? panelTasks.find(x => x.id === id) : null;
+  document.getElementById('pt-name').value = t ? (t.name||'') : '';
+  document.getElementById('pt-desc').value = t ? (t.description||'') : '';
+  document.getElementById('pt-status').value = t ? (t.status||'Pendiente') : 'Pendiente';
+  document.getElementById('pt-due').value = t ? (t.dueDate||'') : '';
+  document.getElementById('pt-priority').value = t ? (t.priority||'Normal') : 'Normal';
+  document.getElementById('pt-calendar').checked = t ? !!t.inCalendar : false;
+  document.getElementById('pt-cal-time').value = t ? (t.calTime||'') : '';
+  _ptInvolved = (t && Array.isArray(t.involved)) ? JSON.parse(JSON.stringify(t.involved)) : [];
+  _ptTags = (t && Array.isArray(t.tags)) ? t.tags.slice() : [];
+  _ptEvidence = (t && Array.isArray(t.evidence)) ? JSON.parse(JSON.stringify(t.evidence)) : [];
+  document.getElementById('pt-modal-title').textContent = t ? 'Editar tarea' : 'Nueva tarea';
+  ptToggleCalendar();
+  renderPtCollabOptions(); renderPtInvolved(); renderPtTags(); renderPtEvidence();
+  document.getElementById('modal-panel-task').classList.add('active');
+}
+
+function renderPtCollabOptions() {
+  const sel = document.getElementById('pt-collab-select'); if (!sel) return;
+  const team = (typeof getMyTeamMembers === 'function') ? getMyTeamMembers() : [];
+  let o = '<option value="">— Colaborador del equipo —</option>';
+  team.forEach(m => { if (m && m.ze) o += '<option value="'+m.ze+'">'+esc(userFullName(m))+'</option>'; });
+  sel.innerHTML = o;
+}
+function ptAddCollaborator() {
+  const sel = document.getElementById('pt-collab-select'); const ze = sel.value; if (!ze) return;
+  if (!_ptInvolved.some(p => p.ze === ze)) _ptInvolved.push({ ze: ze });
+  sel.value=''; renderPtInvolved();
+}
+function ptAddFreePerson() {
+  const inp = document.getElementById('pt-free-name'); const name = (inp.value||'').trim(); if (!name) return;
+  _ptInvolved.push({ name: name }); inp.value=''; renderPtInvolved();
+}
+function ptRemoveInvolved(i){ _ptInvolved.splice(i,1); renderPtInvolved(); }
+function renderPtInvolved() {
+  const box = document.getElementById('pt-involved-list'); if (!box) return;
+  if (!_ptInvolved.length) { box.innerHTML = '<span style="font-size:11.5px;color:var(--text-muted);">Nadie agregado.</span>'; return; }
+  box.innerHTML = _ptInvolved.map((p,i) => '<span class="bdg" style="background:#EEF2FF;color:#3730A3;margin:2px;">👤 '+esc(involvedLabel(p))+(p.ze?'':' (externo)')+' <a onclick="ptRemoveInvolved('+i+')" style="cursor:pointer;color:var(--primary);font-weight:700;">×</a></span>').join('');
+}
+
+function renderPtTags() {
+  const box = document.getElementById('pt-tags-list'); if (!box) return;
+  box.innerHTML = (panelTags||[]).map(tg => {
+    const on = _ptTags.indexOf(tg.id) !== -1;
+    return '<span onclick="ptToggleTag(\''+tg.id+'\')" class="bdg" style="cursor:pointer;margin:2px;background:'+(on?tg.color:tg.color+'1A')+';color:'+(on?'#fff':tg.color)+';border:1px solid '+tg.color+'55;">'+esc(tg.name)+'</span>';
+  }).join('');
+}
+function ptToggleTag(id){ const i=_ptTags.indexOf(id); if(i===-1)_ptTags.push(id); else _ptTags.splice(i,1); renderPtTags(); }
+function ptAddNewTag() {
+  const inp = document.getElementById('pt-newtag'); const name = (inp.value||'').trim(); if (!name) return;
+  const colors = ['#E60012','#1E40AF','#6D28D9','#047857','#92400E','#0891B2','#DB2777'];
+  const tg = { id:'tg'+Date.now(), name: name, color: colors[(panelTags||[]).length % colors.length] };
+  panelTags.push(tg); save(STORAGE.panelTags, panelTags);
+  _ptTags.push(tg.id); inp.value=''; renderPtTags();
+}
+
+function ptHandleEvidence(input) {
+  const files = input.files; if (!files || !files.length) return;
+  Array.from(files).forEach(f => {
+    if (f.size > 3*1024*1024) { alert('"'+f.name+'" supera 3 MB. Subí un archivo más liviano.'); return; }
+    const r = new FileReader();
+    r.onload = () => { _ptEvidence.push({ name: f.name, data: r.result, size: f.size }); renderPtEvidence(); };
+    r.readAsDataURL(f);
+  });
+  input.value='';
+}
+function ptRemoveEvidence(i){ _ptEvidence.splice(i,1); renderPtEvidence(); }
+function renderPtEvidence() {
+  const box = document.getElementById('pt-evidence-list'); if (!box) return;
+  if (!_ptEvidence.length) { box.innerHTML = '<span style="font-size:11.5px;color:var(--text-muted);">Sin archivos.</span>'; return; }
+  box.innerHTML = _ptEvidence.map((e,i) => '<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0;"><a href="'+e.data+'" download="'+esc(e.name)+'" style="color:var(--primary);text-decoration:none;">📎 '+esc(e.name)+'</a><a onclick="ptRemoveEvidence('+i+')" style="cursor:pointer;color:var(--text-muted);">✕</a></div>').join('');
+}
+
+function ptToggleCalendar() {
+  const on = document.getElementById('pt-calendar').checked;
+  document.getElementById('pt-cal-time-wrap').style.display = on ? '' : 'none';
+}
+
+function savePanelTask() {
+  const name = document.getElementById('pt-name').value.trim();
+  if (!name) { alert('El nombre de la tarea es obligatorio.'); return; }
+  const prev = editingPanelTaskId ? panelTasks.find(x => x.id === editingPanelTaskId) : null;
+  const obj = {
+    id: editingPanelTaskId || ('pt'+Date.now()),
+    name: name,
+    description: document.getElementById('pt-desc').value.trim(),
+    status: document.getElementById('pt-status').value,
+    involved: _ptInvolved.slice(),
+    dueDate: document.getElementById('pt-due').value || '',
+    priority: document.getElementById('pt-priority').value,
+    tags: _ptTags.slice(),
+    evidence: _ptEvidence.slice(),
+    inCalendar: document.getElementById('pt-calendar').checked,
+    calTime: document.getElementById('pt-cal-time').value || '',
+    owner: prev && prev.owner ? prev.owner : (currentUser ? currentUser.ze : ''),
+    createdAt: prev && prev.createdAt ? prev.createdAt : new Date().toISOString()
+  };
+  if (editingPanelTaskId) panelTasks = panelTasks.map(x => x.id === editingPanelTaskId ? obj : x);
+  else panelTasks.push(obj);
+  save(STORAGE.panelTasks, panelTasks);
+  closeModal('modal-panel-task');
+  renderPanel();
+  if (obj.inCalendar) renderDashboard();
+}
+
+function deletePanelTask(id) {
+  if (!confirm('¿Eliminar esta tarea?')) return;
+  const t = panelTasks.find(x => x.id === id);
+  panelTasks = panelTasks.filter(x => x.id !== id);
+  save(STORAGE.panelTasks, panelTasks);
+  renderPanel();
+  if (t && t.inCalendar) renderDashboard();
 }
 
 // ── Acciones de tareas asignadas ──
