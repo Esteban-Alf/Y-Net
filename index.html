@@ -3008,7 +3008,7 @@ function openPanelTaskModal(id) {
 
 function renderPtCollabOptions() {
   const sel = document.getElementById('pt-collab-select'); if (!sel) return;
-  const team = (typeof getMyTeamMembers === 'function') ? getMyTeamMembers() : [];
+  const team = (typeof getLinkableUsers === 'function') ? getLinkableUsers() : [];
   let o = '<option value="">— Colaborador del equipo —</option>';
   team.forEach(m => { if (m && m.ze) o += '<option value="'+m.ze+'">'+esc(userFullName(m))+'</option>'; });
   sel.innerHTML = o;
@@ -3520,6 +3520,21 @@ function getMySupervisors() {
   // Returns users who have currentUser in their team
   if (!currentUser) return [];
   return users.filter(u => Array.isArray(u.team) && u.team.indexOf(currentUser.ze) !== -1);
+}
+// Usuarios con los que me puedo vincular: gente a cargo + mis líderes + compañeros (mismo líder)
+function getLinkableUsers() {
+  if (!currentUser) return [];
+  const ze = currentUser.ze;
+  const map = {};
+  (currentUser.team || []).forEach(z => { const u = findUserByZE(z); if (u) map[u.ze] = u; });
+  users.forEach(u => {
+    if (Array.isArray(u.team) && u.team.indexOf(ze) !== -1) {
+      map[u.ze] = u; // mi líder
+      u.team.forEach(z => { if (z !== ze) { const c = findUserByZE(z); if (c) map[c.ze] = c; } }); // compañeros
+    }
+  });
+  delete map[ze];
+  return Object.keys(map).map(k => map[k]);
 }
 function userShortName(u) {
   if (!u) return '';
@@ -7768,6 +7783,7 @@ function trainingGarantiasEmail(t) {
 
 // Envía el detalle de la capacitación: descarga los materiales para adjuntar y
 // abre el mail con el cuerpo armado por secciones, dirigido al responsable de Garantías.
+const ENCUESTA_QR_DATAURL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUoAAAFKCAIAAAD0S4FSAAAGLUlEQVR4nO3dO24kNxRAUcvQHgwn3v+6nBheRTmdiNCAoh/rzjmp0F0f9QWTB/LjeZ7fgKLfp28AOEXekCVvyJI3ZMkbsuQNWfKGLHlDlrwhS96QJW/IkjdkyRuy5A1Z8oYseUOWvCFL3pAlb8j63PnwH3/+9V33cYl///l78ddzz7u+7tr6rqae6JzeE63t/Das3pAlb8iSN2TJG7LkDVnyhix5Q5a8IUvekLU1tba2M21zztTk2dQ01bmZtnOfPedX+01avSFL3pAlb8iSN2TJG7LkDVnyhix5Q5a8Ievg1NranfuW7XzzG3f5euM9n/PG3+Sa1Ruy5A1Z8oYseUOWvCFL3pAlb8iSN2TJG7LGptbeaOoszjv3LbvzrviR1Ruy5A1Z8oYseUOWvCFL3pAlb8iSN2TJG7JMrf2EqfM013Y+O3XKp4m3/4fVG7LkDVnyhix5Q5a8IUvekCVvyJI3ZMkbssam1nqTSVMzbXeeW/rGs0d7v0mrN2TJG7LkDVnyhix5Q5a8IUvekCVvyJI3ZB2cWnvj3NKaHcK+y517vPVYvSFL3pAlb8iSN2TJG7LkDVnyhix5Q5a8IevjeZ7pe3iNO8/iPDeJded1+TqrN2TJG7LkDVnyhix5Q5a8IUvekCVvyJI3ZG3ttTY1a2Wa6rtM/Y/Omdqn7c43afWGLHlDlrwhS96QJW/IkjdkyRuy5A1Z8oasram1qXMed/xqk2dr5yb87px4m7qrqTlLqzdkyRuy5A1Z8oYseUOWvCFL3pAlb8iSN2RtTa1NObfr1Z3zUr3nPXfdO/d4Wzt3z1ZvyJI3ZMkbsuQNWfKGLHlDlrwhS96QJW/I+nieZ+TCbzxv8c6zR++clzr3rtbu/OWsnZvws3pDlrwhS96QJW/IkjdkyRuy5A1Z8oYseUPW1tSaybOve+OOaDveOOO1c921qR3grN6QJW/IkjdkyRuy5A1Z8oYseUOWvCFL3pB1cK+1O6eLzk2P3TmHd+fzrk29jR13vg2rN2TJG7LkDVnyhix5Q5a8IUvekCVvyJI3ZH1OXbg3XbQ2NfE29Z537uqN8393snpDlrwhS96QJW/IkjdkyRuy5A1Z8oYseUPWwb3WdrzxNMYpd85aTc3hnfvmN87DWb0hS96QJW/IkjdkyRuy5A1Z8oYseUOWvCFra2rtjbNlU+dprr1x8uzO/fDO/Rd2rmtqDfhm8oYseUOWvCFL3pAlb8iSN2TJG7LkDVlje631JsCmzh5dm3reO/+D52YWd5haA36avCFL3pAlb8iSN2TJG7LkDVnyhix5Q9bnzod3ZoDu3D9sx9S5ljvunLTbcef/d+rXbvWGLHlDlrwhS96QJW/IkjdkyRuy5A1Z8oasram1O6ep7tyLa2ofr7Vz72pqv7S1N06e7bB6Q5a8IUvekCVvyJI3ZMkbsuQNWfKGLHlD1sETQu88UfHOvbjOmZrTeuMM3zn2WgO+mbwhS96QJW/IkjdkyRuy5A1Z8oYseUPWwam1njt3+XrjvnRT37xz3Sk7z2v1hix5Q5a8IUvekCVvyJI3ZMkbsuQNWfKGrK0TQu+c8tmxMyF05/5hd55ree5tTE283Xn2qNUbsuQNWfKGLHlDlrwhS96QJW/IkjdkyRuytqbW1sxL/ai399idE353/urWzr1nqzdkyRuy5A1Z8oYseUOWvCFL3pAlb8iSN2QdnFpbOzc9NrWf1lpv8mzKnbvW3fmerd6QJW/IkjdkyRuy5A1Z8oYseUOWvCFL3pA1NrX2Rm88fXLt3GendmKbeld3TjRavSFL3pAlb8iSN2TJG7LkDVnyhix5Q5a8IcvU2reZ2gNsbWoXt3Pspfd1Vm/IkjdkyRuy5A1Z8oYseUOWvCFL3pAlb8gam1p749mUU/d8bj5s55undkQ7t4vb2p1PtGb1hix5Q5a8IUvekCVvyJI3ZMkbsuQNWfKGrINTa3fuPbZj6ozIHVPnaZ775rU7J96mWL0hS96QJW/IkjdkyRuy5A1Z8oYseUOWvCHr43me6XsAjrB6Q5a8IUvekCVvyJI3ZMkbsuQNWfKGLHlDlrwhS96QJW/IkjdkyRuy5A1Z8oYseUOWvCFL3pD1HxtgMncz47sNAAAAAElFTkSuQmCC';
 function sendTrainingDetailMail(id) {
   const t = trainings.find(x => x.id === id);
   if (!t) return;
@@ -7787,46 +7803,55 @@ function sendTrainingDetailMail(id) {
       document.body.appendChild(a); a.click(); a.remove();
     }, i * 400);
   });
-  // Cuerpo por secciones
+  // QR de la encuesta (se descarga para adjuntar, igual que el material)
+  try {
+    setTimeout(function(){ var qa=document.createElement('a'); qa.href=ENCUESTA_QR_DATAURL; qa.download='Encuesta-satisfaccion-QR.png'; document.body.appendChild(qa); qa.click(); qa.remove(); }, (mats.length+1)*400);
+  } catch(e){}
+
+  // Cuerpo (estructura reducida)
   const ev = t.evaluation || {};
   const parts = Array.isArray(t.participants) ? t.participants : [];
   const nl = '\n';
-  let body = 'Estimado/a responsable de Garantías de ' + dealerLine + ',' + nl + nl;
+  let body = 'Estimado ' + dealerLine + ',' + nl;
   body += 'Compartimos el detalle de la capacitación realizada.' + nl + nl;
-  body += '— DATOS DE LA CAPACITACIÓN —' + nl;
+
+  body += 'DATOS DE LA CAPACITACIÓN' + nl;
   body += 'Tema: ' + (t.topic || '-') + nl;
   body += 'Fecha: ' + (t.date || '-') + (t.time ? ' ' + t.time : '') + nl;
   if (t.duration) body += 'Duración: ' + t.duration + ' min' + nl;
-  body += 'Concesionario: ' + dealerLine + nl;
-  if (t.audience) body += 'Audiencia: ' + t.audience + nl;
-  if (t.responsible) body += 'Responsable: ' + t.responsible + nl;
   if (t.objective) body += 'Objetivo: ' + t.objective + nl;
   body += nl;
-  body += '— PARTICIPANTES (' + parts.length + ') —' + nl;
-  if (parts.length) parts.forEach(p => { body += '• ' + (p.name || '-') + (p.role ? ' (' + p.role + ')' : '') + nl; });
-  else body += 'Sin participantes cargados.' + nl;
+
+  body += 'PARTICIPANTES' + nl;
+  if (parts.length) parts.forEach(function(p){ body += '• ' + (p.name || '-') + (p.role ? ' (' + p.role + ')' : '') + nl; });
+  else body += '• (sin participantes cargados)' + nl;
   body += nl;
-  body += '— EVALUACIÓN —' + nl;
-  let evAny = false;
-  if (ev.result) { body += 'Resultado: ' + ev.result + nl; evAny = true; }
-  if (ev.comprehension != null) { body += 'Comprensión: ' + ev.comprehension + nl; evAny = true; }
-  if (ev.participation != null) { body += 'Participación: ' + ev.participation + nl; evAny = true; }
-  if (ev.survey) { body += 'Encuesta: ' + ev.survey + nl; evAny = true; }
-  if (ev.feedback) { body += 'Devolución: ' + ev.feedback + nl; evAny = true; }
-  if (!evAny) body += 'Sin evaluación cargada.' + nl;
+
+  if (mats.length) {
+    body += 'MATERIAL UTILIZADO' + nl;
+    mats.forEach(function(doc){ body += '• ' + (doc.name || 'documento') + nl; });
+    body += 'Se adjunta el material presentado durante la capacitación para futuras consultas y referencia.' + nl + nl;
+  }
+
+  body += 'RESULTADOS Y EVALUACIÓN' + nl;
+  if (ev.result) body += 'Capacitación ' + String(ev.result).toLowerCase() + '.' + nl;
+  if (ev.feedback) body += ev.feedback + nl;
+  if (!ev.result && !ev.feedback) body += '(sin evaluación cargada)' + nl;
   body += nl;
-  if (t.observations || t.nextAction) {
-    body += '— OBSERVACIONES Y COMENTARIOS —' + nl;
-    if (t.observations) body += t.observations + nl;
-    if (t.nextAction) body += 'Próxima acción: ' + t.nextAction + nl;
+
+  if (t.observations) { body += 'OBSERVACIONES' + nl + t.observations + nl + nl; }
+
+  if (t.nextAction) {
+    body += 'PRÓXIMOS PASOS' + nl;
+    String(t.nextAction).split('\n').map(function(x){return x.trim();}).filter(Boolean).forEach(function(x){ body += '• ' + x.replace(/^[•\-\*]\s*/, '') + nl; });
     body += nl;
   }
-  body += '— DOCUMENTOS —' + nl;
-  if (mats.length) {
-    mats.forEach(doc => { body += '• ' + (doc.name || 'documento') + nl; });
-    body += '(Los documentos se descargaron en tu equipo para que los adjuntes a este correo.)' + nl;
-  } else { body += 'Sin documentos asociados.' + nl; }
-  body += nl + 'Quedamos a disposición por cualquier consulta.' + nl + 'Saludos cordiales,' + nl + 'Garantías';
+
+  body += 'Agradezco la participación y el compromiso de todo el equipo. Fue un gusto conocerlos y compartir este espacio de trabajo.' + nl + nl;
+  body += 'Con el objetivo de identificar oportunidades de mejora, los invitamos a completar una breve encuesta de satisfacción sobre la capacitación realizada. La misma es completamente anónima y podrán acceder escaneando el código QR adjunto.' + nl + nl;
+  body += 'Ante cualquier consulta, quedo a disposición.' + nl;
+  body += 'También pueden contactarme a través de mi teléfono corporativo, incluido en la firma de este correo.' + nl + nl;
+  body += 'Saludos cordiales,'
 
   const subject = ('Detalle de capacitación - ' + (t.topic || '') + (d ? ' - ' + d.n : '')).toUpperCase();
   if (!to) setTimeout(() => alert('No hay mail del responsable de Garantías cargado para este concesionario. Se abrió el correo con el cuerpo listo: agregá la dirección manualmente.'), mats.length ? mats.length * 400 + 200 : 0);
@@ -10005,4 +10030,3 @@ if (!window.__YNET_CLOUD) { initApp(); }
 </script>
 </body>
 </html>
-
