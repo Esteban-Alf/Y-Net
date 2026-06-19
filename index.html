@@ -5580,7 +5580,7 @@ function notifyDealerByMail(recallId, code) {
   html += 'El objetivo de este comunicado es darle el conocimiento de las unidades involucradas que le fueron asignadas, y proponer que llevemos esta actividad en conjunto para lograr el cumplimiento de la misma.<br><br>';
   html += '<b>Les solicito que confirmen la recepción de este mail, para luego definir un objetivo de cumplimiento mensual que sea alcanzable y acorde a la realidad de su concesionario</b>.<br>';
   html += 'Nuestra estrategia es idear un plan que nos permita cumplir con el objetivo y dar seguimiento al avance de la campaña de forma ordenada y sostenible en el tiempo, la actividad se auditará mes a mes hasta concluir con la campaña.<br><br>';
-  html += '<span style="color:' + RED + ';">(Aclaro que, hasta que no definamos ese objetivo en conjunto, no se realizará ninguna medición de cumplimiento, la prioridad es acordar una metodología de trabajo que resulte clara y viable para ambas partes. Por lo que no pondremos fechas de cumplimiento en esta primera instancia).</span><br><br>';
+  html += '<font color="' + RED + '"><span style="color:' + RED + ';">Aclaro que, hasta que no definamos ese objetivo en conjunto, no se realizará ninguna medición de cumplimiento, la prioridad es acordar una metodología de trabajo que resulte clara y viable para ambas partes. Por lo que no pondremos fechas de cumplimiento en esta primera instancia.</span></font><br><br>';
   html += 'Buscamos acompañarlos durante el proceso, brindar soporte y seguimiento para alcanzar los resultados esperados a nivel global.<br><br>';
   html += 'Por favor, confirme la recepción de este correo para iniciar el diálogo y planificar el próximo accionar.<br><br>';
   html += 'A disposición ante cualquier consulta. Saludos cordiales,';
@@ -5601,7 +5601,7 @@ function notifyDealerByMail(recallId, code) {
   body += 'El objetivo de este comunicado es darle el conocimiento de las unidades involucradas que le fueron asignadas, y proponer que llevemos esta actividad en conjunto para lograr el cumplimiento de la misma.\n\n';
   body += 'Les solicito que confirmen la recepción de este mail, para luego definir un objetivo de cumplimiento mensual que sea alcanzable y acorde a la realidad de su concesionario.\n';
   body += 'Nuestra estrategia es idear un plan que nos permita cumplir con el objetivo y dar seguimiento al avance de la campaña de forma ordenada y sostenible en el tiempo, la actividad se auditará mes a mes hasta concluir con la campaña.\n\n';
-  body += '(Aclaro que, hasta que no definamos ese objetivo en conjunto, no se realizará ninguna medición de cumplimiento, la prioridad es acordar una metodología de trabajo que resulte clara y viable para ambas partes. Por lo que no pondremos fechas de cumplimiento en esta primera instancia).\n\n';
+  body += 'Aclaro que, hasta que no definamos ese objetivo en conjunto, no se realizará ninguna medición de cumplimiento, la prioridad es acordar una metodología de trabajo que resulte clara y viable para ambas partes. Por lo que no pondremos fechas de cumplimiento en esta primera instancia.\n\n';
   body += 'Buscamos acompañarlos durante el proceso, brindar soporte y seguimiento para alcanzar los resultados esperados a nivel global.\n\n';
   body += 'Por favor, confirme la recepción de este correo para iniciar el diálogo y planificar el próximo accionar.\n\n';
   body += 'A disposición ante cualquier consulta. Saludos cordiales,';
@@ -5780,33 +5780,110 @@ function deleteRecallUnitCompletely() {
 
 let _editingRecallUnit = null;
 
-function exportRecallDealerUnits(recallId, code) {
+function ensureExcelJS() {
+  return new Promise(function(resolve, reject) {
+    if (window.ExcelJS) { resolve(); return; }
+    var sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+    sc.onload = function(){ resolve(); };
+    sc.onerror = function(){ reject(new Error('No se pudo cargar ExcelJS')); };
+    document.head.appendChild(sc);
+  });
+}
+
+function sanitizeFileName(s) {
+  return String(s || '').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+async function exportRecallDealerUnits(recallId, code) {
   const r = recalls.find(x => x.id === recallId);
   if (!r) return;
   const units = (r.units || []).filter(u => (u.assignedCode || u.dealerCode) === code);
   const dlr = DEALERS.find(d => d.code === code);
+  const dealerName = dlr ? dlr.n : code;
   const notified = (r.notifications || {})[code] || '';
-  const p = dealerProfiles[code] || {};
-  const rows = [['Campaña','Modelo','Chasis','Concesionario','Código','Teléfono','Email','Notificado','Serviciado','Fecha Servicio','Realizado por']];
-  units.forEach(u => {
-    rows.push([
-      r.name, u.model, u.chassis,
-      dlr ? dlr.n : (u.assignedName || code),
-      code,
-      p.dlr_phone || '',
-      p.dlr_email || '',
-      notified,
-      u.serviced ? 'Sí' : 'No',
+  try { await ensureExcelJS(); }
+  catch (e) { alert('No se pudo cargar el generador de Excel. Revisá tu conexión e intentá de nuevo.'); return; }
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Unidades', { views: [{ state: 'frozen', ySplit: 2 }] });
+
+  const DARK = 'FF16181D', REDF = 'FFC00000', HDR = 'FF374151', WHITE = 'FFFFFFFF';
+  ws.columns = [
+    { width: 34 }, { width: 16 }, { width: 22 }, { width: 30 },
+    { width: 10 }, { width: 14 }, { width: 14 }, { width: 18 }, { width: 22 }
+  ];
+
+  // Fila 1: encabezados de sección
+  ws.mergeCells('A1:F1');
+  ws.mergeCells('G1:I1');
+  ws.getCell('A1').value = 'Información de las unidades';
+  ws.getCell('G1').value = 'Información a completar';
+  ws.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK } };
+  ws.getCell('G1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: REDF } };
+
+  // Fila 2: encabezados de columnas
+  ws.getRow(2).values = ['Campaña','Modelo','Chasis','Concesionario','Código','Notificado','Realizado','Fecha de realización','¿Realizado por el concesionario?'];
+  ws.getRow(2).eachCell(function(c){ c.fill = { type:'pattern', pattern:'solid', fgColor:{ argb: HDR } }; });
+
+  [1,2].forEach(function(rn){
+    ws.getRow(rn).height = (rn===2 ? 30 : 22);
+    ws.getRow(rn).eachCell(function(c){
+      c.font = { bold:true, color:{ argb: WHITE } };
+      c.alignment = { horizontal:'center', vertical:'middle', wrapText:true };
+    });
+  });
+
+  // Datos
+  units.forEach(function(u){
+    ws.addRow([
+      r.name || '', u.model || '', u.chassis || '', dealerName, code, notified,
+      u.serviced ? 'Sí' : '',
       u.serviceDate || '',
-      u.servicedByName || ''
+      u.servicedByName ? 'Sí' : ''
     ]);
   });
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{wch:24},{wch:14},{wch:18},{wch:30},{wch:10},{wch:18},{wch:32},{wch:12},{wch:12},{wch:14},{wch:30}];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Unidades');
-  const fname = 'recall_'+code+'_'+(dlr?dlr.n.replace(/[^a-zA-Z0-9]/g,'_'):'concesionario')+'.xlsx';
-  XLSX.writeFile(wb, fname);
+
+  const lastRow = ws.rowCount;
+  const thin = { style:'thin', color:{ argb:'FFD9DCE1' } };
+  for (let rr = 1; rr <= lastRow; rr++) {
+    ws.getRow(rr).eachCell({ includeEmpty:true }, function(cell){
+      cell.border = { top:thin, left:thin, bottom:thin, right:thin };
+      if (rr >= 3) cell.alignment = { vertical:'middle' };
+    });
+  }
+
+  // Desbloquear sólo G/H/I en filas de datos + validaciones
+  for (let rr = 3; rr <= lastRow; rr++) {
+    ['G','H','I'].forEach(function(col){
+      ws.getCell(col + rr).protection = { locked: false };
+    });
+    ws.getCell('G' + rr).dataValidation = { type:'list', allowBlank:true, formulae:['"Sí,No"'] };
+    ws.getCell('I' + rr).dataValidation = { type:'list', allowBlank:true, formulae:['"Sí,No"'] };
+    ws.getCell('H' + rr).numFmt = 'dd/mm/yyyy';
+    ws.getCell('G' + rr).alignment = { horizontal:'center', vertical:'middle' };
+    ws.getCell('I' + rr).alignment = { horizontal:'center', vertical:'middle' };
+    ws.getCell('H' + rr).alignment = { horizontal:'center', vertical:'middle' };
+  }
+
+  // Bloquear toda la hoja salvo lo desbloqueado (sin contraseña)
+  await ws.protect('', {
+    selectLockedCells: true, selectUnlockedCells: true,
+    formatCells: false, formatColumns: false, formatRows: false,
+    insertColumns: false, insertRows: false, insertHyperlinks: false,
+    deleteColumns: false, deleteRows: false, sort: false, autoFilter: false, pivotTables: false
+  });
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const fname = sanitizeFileName(r.name) + ' - ' + sanitizeFileName(dealerName) + '.xlsx';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1500);
 }
 
 function exportRecallAllDealers(recallId) {
