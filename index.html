@@ -1657,11 +1657,24 @@ function primaryOwnerZe() {
 }
 function stampLegacyOwnership() {
   const pz = primaryOwnerZe();
-  if (!pz) return; // sin dueño primario identificable, no tocamos (se mantiene visible)
+  const me = currentUser ? currentUser.ze : null;
   let ca = false, ct = false, cn = false;
-  (activities || []).forEach(a => { if (!a.owner) { a.owner = pz; ca = true; } });
-  (trips || []).forEach(t => { if (!t.owner) { t.owner = pz; ct = true; } });
-  (trainings || []).forEach(t => { if (!t.owner) { t.owner = pz; cn = true; } });
+  // Actividades y viajes viven en la bandeja de cada usuario: son de ese usuario.
+  // Tomamos lo sin dueño, y deshacemos la atribución incorrecta al primario en bandejas ajenas.
+  if (me) {
+    (activities || []).forEach(a => {
+      if (!a.owner) { a.owner = me; ca = true; }
+      else if (pz && a.owner === pz && a.owner !== me && a.assignee !== me && !((a.watchers||[]).indexOf(me) !== -1)) { a.owner = me; ca = true; }
+    });
+    (trips || []).forEach(t => {
+      if (!t.owner) { t.owner = me; ct = true; }
+      else if (pz && t.owner === pz && t.owner !== me) { t.owner = me; ct = true; }
+    });
+  }
+  // Capacitaciones son compartidas (clave global): se atribuyen al dueño primario.
+  if (pz) {
+    (trainings || []).forEach(t => { if (!t.owner) { t.owner = pz; cn = true; } });
+  }
   if (ca) save(STORAGE.activities, activities);
   if (ct) save(STORAGE.trips, trips);
   if (cn) save(STORAGE.trainings, trainings);
@@ -9860,21 +9873,37 @@ if (!window.__YNET_CLOUD) { initApp(); }
   localStorage.removeItem = function(k){ _origRemove(k); if (isSharedKey(k)) cloudDelete(k); };
   let _q = Promise.resolve();
   const _pending = new Map(); // claves con escritura aún no confirmada en la nube
+  // Marca de tiempo local por clave, para que la nube no pise datos locales más nuevos
+  function _loadMeta(){ try { return JSON.parse(localStorage.getItem('__ynet_sync_meta') || '{}'); } catch(e){ return {}; } }
+  let _meta = _loadMeta();
+  function _saveMeta(){ try { _origSet('__ynet_sync_meta', JSON.stringify(_meta)); } catch(e){} }
+  function _tsMs(s){ const t = Date.parse(s || ''); return isNaN(t) ? 0 : t; }
+  // Primera ejecución tras esta actualización: proteger lo que ya está local (tratarlo como lo más nuevo)
+  if (!localStorage.getItem('__ynet_sync_meta')) {
+    const _nowTs = new Date().toISOString();
+    for (let _i = 0; _i < localStorage.length; _i++) {
+      const _k = localStorage.key(_i);
+      if (_k && _k.indexOf('gg_') === 0 && SESSION_KEYS.indexOf(_k) === -1) _meta[_k] = _nowTs;
+    }
+    _saveMeta();
+  }
   function cloudUpsert(k, v){
+    const ts = new Date().toISOString();
+    _meta[k] = ts; _saveMeta();
     _pending.set(k, v);
-    _q = _q.then(() => sb.from('app_data').upsert({ k:k, v:v, updated_at:new Date().toISOString() }, { onConflict:'k' }).then(r => {
+    _q = _q.then(() => sb.from('app_data').upsert({ k:k, v:v, updated_at: ts }, { onConflict:'k' }).then(r => {
       if (r.error) { console.warn('upsert', k, r.error.message); }
       else if (_pending.get(k) === v) { _pending.delete(k); } // confirmada
     }, e => console.warn('upsert', e)));
   }
-  function cloudDelete(k){ _pending.delete(k); _q = _q.then(() => sb.from('app_data').delete().eq('k', k).then(()=>{}, e => console.warn('del', e))); }
+  function cloudDelete(k){ _pending.delete(k); delete _meta[k]; _saveMeta(); _q = _q.then(() => sb.from('app_data').delete().eq('k', k).then(()=>{}, e => console.warn('del', e))); }
 
   // Guardado de emergencia: si el usuario recarga/cierra con escrituras sin subir,
   // las mandamos de forma SINCRÓNICA para no perder lo recién cargado.
   function flushPendingSync(){
     if (!_pending.size || !_accessToken) return;
     const rows = [];
-    _pending.forEach(function(v, k){ rows.push({ k:k, v:v, updated_at:new Date().toISOString() }); });
+    _pending.forEach(function(v, k){ rows.push({ k:k, v:v, updated_at: _meta[k] || new Date().toISOString() }); });
     try {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', SUPABASE_URL + '/rest/v1/app_data?on_conflict=k', false); // sincrónico
@@ -9891,9 +9920,31 @@ if (!window.__YNET_CLOUD) { initApp(); }
   document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'hidden') flushPendingSync(); });
 
   async function hydrate(){
-    const { data, error } = await sb.from('app_data').select('k,v');
+    const { data, error } = await sb.from('app_data').select('k,v,updated_at');
     if (error) { console.warn('hydrate', error.message); return false; }
-    (data||[]).forEach(row => { if (isSharedKey(row.k)) _origSet(row.k, row.v); });
+    const cloudKeys = {};
+    (data||[]).forEach(row => {
+      if (!isSharedKey(row.k)) return;
+      cloudKeys[row.k] = true;
+      const localTs = _meta[row.k];
+      if (!localTs || _tsMs(row.updated_at) >= _tsMs(localTs)) {
+        // La nube es más nueva (o no hay marca local): aplicar nube
+        _origSet(row.k, row.v);
+        _meta[row.k] = row.updated_at || localTs || new Date().toISOString();
+      } else {
+        // Lo local es más nuevo y no se había subido: conservar local y re-subir
+        const lv = localStorage.getItem(row.k);
+        if (lv != null) cloudUpsert(row.k, lv);
+      }
+    });
+    // Claves locales con cambios que nunca llegaron a la nube: subirlas
+    Object.keys(_meta).forEach(k => {
+      if (isSharedKey(k) && !cloudKeys[k]) {
+        const lv = localStorage.getItem(k);
+        if (lv != null) cloudUpsert(k, lv);
+      }
+    });
+    _saveMeta();
     return true;
   }
 
