@@ -5560,57 +5560,58 @@ function notifyDealerByMail(recallId, code) {
   let vig = r.start || '-';
   if (/^\d{4}-\d{2}-\d{2}/.test(vig)) { const pp = vig.slice(0,10).split('-'); vig = pp[2]+'/'+pp[1]+'/'+pp[0]; }
   const dn = esc(dealerLine), rn = esc(r.name || ''), rm = esc(r.models || '-'), rv = esc(vig);
+  const RED = '#C00000';
 
-  // Versión con formato (negritas reales) para pegar en el correo
+  // Versión con formato (negritas + rojo) para pegar en el correo
   let html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#16181D;line-height:1.55;">';
   html += 'Estimado <b>' + dn + '</b>,<br><br>';
   html += 'Les compartimos la información correspondiente a la campaña de recall activa:<br>';
   html += '<b>Campaña: ' + rn + '</b><br>';
-  html += '<b>Modelo involucrado: ' + rm + '</b>&nbsp;&nbsp;&nbsp;<b>Vigencia: Desde el ' + rv + '</b><br><br>';
-  html += '<b>Adjuntamos:</b>';
+  html += '<b>Modelo involucrado: ' + rm + '</b><br>';
+  html += '<b>Vigencia: Desde el ' + rv + '</b><br><br>';
+  html += '<b>Adjuntos</b>:';
   html += '<ul style="margin:6px 0 14px;padding-left:20px;">';
   html += '<li>Boletín de lanzamiento de la campaña</li>';
-  html += '<li>Listado de unidades asignadas a usted.</li>';
+  html += '<li>Listado de unidades asignadas a ustedes.</li>';
   html += '<li>Instructivo de aplicación de la campaña.</li>';
   html += '<li>Acta de intervención de campaña de recall.</li>';
   html += '</ul>';
   html += '<b>Propuesta</b><br>';
-  html += 'El objetivo de esta comunicación es darle el conocimiento la campaña y proponer que llevemos esta actividad en conjunto para lograr el cumplimiento de las unidades asignadas.<br><br>';
-  html += 'Les solicito que me confirmen la recepción de este mail y consiguiente <b>definiremos un objetivo mensual que sea alcanzable y acorde a la realidad de su concesionario</b>.<br>';
-  html += 'Nuestra estrategia es construir una planificación que nos permita cumplir con el objetivo y dar seguimiento al avance de la campaña de forma ordenada y sostenible en el tiempo hasta concluir con la campaña.<br><br>';
-  html += '<b>Remarco</b>, hasta que no definamos ese objetivo en conjunto, no se realizará ninguna medición de cumplimiento, ya que la prioridad es acordar una metodología de trabajo que resulte clara y viable para ambas partes. Por lo que no pondremos fechas en esta primera instancia.<br><br>';
-  html += 'Nuestro propósito es acompañarlos durante el proceso, darles soporte y seguimiento para alcanzar los resultados esperados.<br><br>';
-  html += 'Por favor, confirme la recepción de este correo.<br><br>';
-  html += 'A disposición ante cualquier consulta.<br><br>';
-  html += 'Saludos cordiales,';
+  html += 'El objetivo de este comunicado es darle el conocimiento de las unidades involucradas que le fueron asignadas, y proponer que llevemos esta actividad en conjunto para lograr el cumplimiento de la misma.<br><br>';
+  html += '<b>Les solicito que confirmen la recepción de este mail, para luego definir un objetivo de cumplimiento mensual que sea alcanzable y acorde a la realidad de su concesionario</b>.<br>';
+  html += 'Nuestra estrategia es idear un plan que nos permita cumplir con el objetivo y dar seguimiento al avance de la campaña de forma ordenada y sostenible en el tiempo, la actividad se auditará mes a mes hasta concluir con la campaña.<br><br>';
+  html += '<span style="color:' + RED + ';">(Aclaro que, hasta que no definamos ese objetivo en conjunto, no se realizará ninguna medición de cumplimiento, la prioridad es acordar una metodología de trabajo que resulte clara y viable para ambas partes. Por lo que no pondremos fechas de cumplimiento en esta primera instancia).</span><br><br>';
+  html += 'Buscamos acompañarlos durante el proceso, brindar soporte y seguimiento para alcanzar los resultados esperados a nivel global.<br><br>';
+  html += 'Por favor, confirme la recepción de este correo para iniciar el diálogo y planificar el próximo accionar.<br><br>';
+  html += 'A disposición ante cualquier consulta. Saludos cordiales,';
   html += '</div>';
 
-  // Versión texto plano (respaldo para el mailto)
+  // Versión texto plano (para el portapapeles, sin formato)
   let body = 'Estimado ' + dealerLine + ',\n\n';
   body += 'Les compartimos la información correspondiente a la campaña de recall activa:\n';
   body += 'Campaña: ' + (r.name || '') + '\n';
-  body += 'Modelo involucrado: ' + (r.models || '-') + '   Vigencia: Desde el ' + vig + '\n\n';
-  body += 'Adjuntamos:\n';
+  body += 'Modelo involucrado: ' + (r.models || '-') + '\n';
+  body += 'Vigencia: Desde el ' + vig + '\n\n';
+  body += 'Adjuntos:\n';
   body += '• Boletín de lanzamiento de la campaña\n';
-  body += '• Listado de unidades asignadas a usted.\n';
+  body += '• Listado de unidades asignadas a ustedes.\n';
   body += '• Instructivo de aplicación de la campaña.\n';
   body += '• Acta de intervención de campaña de recall.\n\n';
   body += 'Propuesta\n';
-  body += 'El objetivo de esta comunicación es darle el conocimiento la campaña y proponer que llevemos esta actividad en conjunto para lograr el cumplimiento de las unidades asignadas.\n\n';
-  body += 'Les solicito que me confirmen la recepción de este mail y consiguiente definiremos un objetivo mensual que sea alcanzable y acorde a la realidad de su concesionario.\n';
-  body += 'Nuestra estrategia es construir una planificación que nos permita cumplir con el objetivo y dar seguimiento al avance de la campaña de forma ordenada y sostenible en el tiempo hasta concluir con la campaña.\n\n';
-  body += 'Remarco, hasta que no definamos ese objetivo en conjunto, no se realizará ninguna medición de cumplimiento, ya que la prioridad es acordar una metodología de trabajo que resulte clara y viable para ambas partes. Por lo que no pondremos fechas en esta primera instancia.\n\n';
-  body += 'Nuestro propósito es acompañarlos durante el proceso, darles soporte y seguimiento para alcanzar los resultados esperados.\n\n';
-  body += 'Por favor, confirme la recepción de este correo.\n\n';
-  body += 'A disposición ante cualquier consulta.\n\n';
-  body += 'Saludos cordiales,';
+  body += 'El objetivo de este comunicado es darle el conocimiento de las unidades involucradas que le fueron asignadas, y proponer que llevemos esta actividad en conjunto para lograr el cumplimiento de la misma.\n\n';
+  body += 'Les solicito que confirmen la recepción de este mail, para luego definir un objetivo de cumplimiento mensual que sea alcanzable y acorde a la realidad de su concesionario.\n';
+  body += 'Nuestra estrategia es idear un plan que nos permita cumplir con el objetivo y dar seguimiento al avance de la campaña de forma ordenada y sostenible en el tiempo, la actividad se auditará mes a mes hasta concluir con la campaña.\n\n';
+  body += '(Aclaro que, hasta que no definamos ese objetivo en conjunto, no se realizará ninguna medición de cumplimiento, la prioridad es acordar una metodología de trabajo que resulte clara y viable para ambas partes. Por lo que no pondremos fechas de cumplimiento en esta primera instancia).\n\n';
+  body += 'Buscamos acompañarlos durante el proceso, brindar soporte y seguimiento para alcanzar los resultados esperados a nivel global.\n\n';
+  body += 'Por favor, confirme la recepción de este correo para iniciar el diálogo y planificar el próximo accionar.\n\n';
+  body += 'A disposición ante cualquier consulta. Saludos cordiales,';
 
   const firstEmail = p.dlr_email.split(/[;,]/)[0].trim();
-  const mailto = 'mailto:'+encodeURIComponent(firstEmail)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+  const mailto = 'mailto:' + encodeURIComponent(firstEmail) + '?subject=' + encodeURIComponent(subject); // cuerpo vacío: el texto va por portapapeles
   function _finishNotify(copied){
     alert(copied
-      ? 'Copiamos el correo con las negritas al portapapeles. En el mail que se abre, pegá con Ctrl+V (o Cmd+V) sobre el cuerpo para que entre con el formato. Si tu correo no admite formato, el texto plano ya queda cargado igual.'
-      : 'Se abrió el correo con el texto cargado. (Tu navegador no permitió copiar la versión con negritas al portapapeles.)');
+      ? 'Copiamos el correo con formato (negritas y rojo) al portapapeles. Se abre el mail con el destinatario y el asunto: pegá con Ctrl+V (o Cmd+V) en el cuerpo.'
+      : 'Se abrió el correo con el destinatario y el asunto. (Tu navegador no permitió copiar el texto con formato; copialo desde el detalle de la campaña.)');
     window.location.href = mailto;
     if (!(r.notifications||{})[code]) { setRecallNotification(recallId, code, new Date().toISOString().slice(0,10)); }
   }
