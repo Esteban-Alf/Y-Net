@@ -5557,28 +5557,69 @@ function notifyDealerByMail(recallId, code) {
   const dealerName = (dlr ? dlr.n : code);
   const dealerLine = dealerName.toUpperCase() + ' - ' + code;
   const subject = ('Campaña de recall ' + (r.name || '') + ' - ' + dealerLine).toUpperCase();
-  let body = 'Estimado ' + dealerLine + '\n\n';
-  body += 'Compartimos la información detallada sobre la campaña de recall activa:\n';
-  body += '"' + (r.name || '') + '".\n';
-  body += 'Modelos involucrados: ' + (r.models || '-') + '\n';
-  body += 'Vigencia desde: ' + (r.start || '-') + '\n\n';
-  body += 'Adjuntos:\n';
-  body += '• Listado de unidades afectadas\n';
-  body += '• Instructivo paso a paso de aplicación de la campaña\n';
-  body += '• Acta de intervención de campaña de recall\n\n';
-  body += 'Propuesta:\n';
-  body += 'Nuestro objetivo es acompañarlos, dar seguimiento y analizar oportunidades de mejoras sobre el proceso actual de campañas activas a realizar.\n\n';
-  body += 'Para ello, adjuntamos el listado de unidades involucradas que le fueron asignadas para que conciliemos una estrategia de acción para dar cumplimiento con las obligaciones que nos demanda casa matriz, la cual será auditada y medible con el fin de observar el compromiso y cumplimiento mes a mes hasta finalizar con el listado de unidades.\n\n';
-  body += 'Estaremos en contacto para planificar las acciones a seguir y la metodología de cómo manejar dicha información.\n\n';
-  body += 'Les solicito por favor la confirmación de recepción y comprensión de este mail, cualquier duda o consulta puede comunicarse por nuestros canales habituales de Garantías.\n\n';
-  body += 'Ante cualquier consulta estaremos a disposición. Saludos cordiales,';
+  let vig = r.start || '-';
+  if (/^\d{4}-\d{2}-\d{2}/.test(vig)) { const pp = vig.slice(0,10).split('-'); vig = pp[2]+'/'+pp[1]+'/'+pp[0]; }
+  const dn = esc(dealerLine), rn = esc(r.name || ''), rm = esc(r.models || '-'), rv = esc(vig);
+
+  // Versión con formato (negritas reales) para pegar en el correo
+  let html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#16181D;line-height:1.55;">';
+  html += 'Estimado <b>' + dn + '</b>,<br><br>';
+  html += 'Les compartimos la información correspondiente a la campaña de recall activa:<br>';
+  html += '<b>Campaña: ' + rn + '</b><br>';
+  html += '<b>Modelo involucrado: ' + rm + '</b>&nbsp;&nbsp;&nbsp;<b>Vigencia: Desde el ' + rv + '</b><br><br>';
+  html += '<b>Adjuntamos:</b>';
+  html += '<ul style="margin:6px 0 14px;padding-left:20px;">';
+  html += '<li>Boletín de lanzamiento de la campaña</li>';
+  html += '<li>Listado de unidades asignadas a usted.</li>';
+  html += '<li>Instructivo de aplicación de la campaña.</li>';
+  html += '<li>Acta de intervención de campaña de recall.</li>';
+  html += '</ul>';
+  html += '<b>Propuesta</b><br>';
+  html += 'El objetivo de esta comunicación es darle el conocimiento la campaña y proponer que llevemos esta actividad en conjunto para lograr el cumplimiento de las unidades asignadas.<br><br>';
+  html += 'Les solicito que me confirmen la recepción de este mail y consiguiente <b>definiremos un objetivo mensual que sea alcanzable y acorde a la realidad de su concesionario</b>.<br>';
+  html += 'Nuestra estrategia es construir una planificación que nos permita cumplir con el objetivo y dar seguimiento al avance de la campaña de forma ordenada y sostenible en el tiempo hasta concluir con la campaña.<br><br>';
+  html += '<b>Remarco</b>, hasta que no definamos ese objetivo en conjunto, no se realizará ninguna medición de cumplimiento, ya que la prioridad es acordar una metodología de trabajo que resulte clara y viable para ambas partes. Por lo que no pondremos fechas en esta primera instancia.<br><br>';
+  html += 'Nuestro propósito es acompañarlos durante el proceso, darles soporte y seguimiento para alcanzar los resultados esperados.<br><br>';
+  html += 'Por favor, confirme la recepción de este correo.<br><br>';
+  html += 'A disposición ante cualquier consulta.<br><br>';
+  html += 'Saludos cordiales,';
+  html += '</div>';
+
+  // Versión texto plano (respaldo para el mailto)
+  let body = 'Estimado ' + dealerLine + ',\n\n';
+  body += 'Les compartimos la información correspondiente a la campaña de recall activa:\n';
+  body += 'Campaña: ' + (r.name || '') + '\n';
+  body += 'Modelo involucrado: ' + (r.models || '-') + '   Vigencia: Desde el ' + vig + '\n\n';
+  body += 'Adjuntamos:\n';
+  body += '• Boletín de lanzamiento de la campaña\n';
+  body += '• Listado de unidades asignadas a usted.\n';
+  body += '• Instructivo de aplicación de la campaña.\n';
+  body += '• Acta de intervención de campaña de recall.\n\n';
+  body += 'Propuesta\n';
+  body += 'El objetivo de esta comunicación es darle el conocimiento la campaña y proponer que llevemos esta actividad en conjunto para lograr el cumplimiento de las unidades asignadas.\n\n';
+  body += 'Les solicito que me confirmen la recepción de este mail y consiguiente definiremos un objetivo mensual que sea alcanzable y acorde a la realidad de su concesionario.\n';
+  body += 'Nuestra estrategia es construir una planificación que nos permita cumplir con el objetivo y dar seguimiento al avance de la campaña de forma ordenada y sostenible en el tiempo hasta concluir con la campaña.\n\n';
+  body += 'Remarco, hasta que no definamos ese objetivo en conjunto, no se realizará ninguna medición de cumplimiento, ya que la prioridad es acordar una metodología de trabajo que resulte clara y viable para ambas partes. Por lo que no pondremos fechas en esta primera instancia.\n\n';
+  body += 'Nuestro propósito es acompañarlos durante el proceso, darles soporte y seguimiento para alcanzar los resultados esperados.\n\n';
+  body += 'Por favor, confirme la recepción de este correo.\n\n';
+  body += 'A disposición ante cualquier consulta.\n\n';
+  body += 'Saludos cordiales,';
+
   const firstEmail = p.dlr_email.split(/[;,]/)[0].trim();
   const mailto = 'mailto:'+encodeURIComponent(firstEmail)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
-  window.location.href = mailto;
-  if (!(r.notifications||{})[code]) {
-    const today = new Date().toISOString().slice(0,10);
-    setRecallNotification(recallId, code, today);
+  function _finishNotify(copied){
+    alert(copied
+      ? 'Copiamos el correo con las negritas al portapapeles. En el mail que se abre, pegá con Ctrl+V (o Cmd+V) sobre el cuerpo para que entre con el formato. Si tu correo no admite formato, el texto plano ya queda cargado igual.'
+      : 'Se abrió el correo con el texto cargado. (Tu navegador no permitió copiar la versión con negritas al portapapeles.)');
+    window.location.href = mailto;
+    if (!(r.notifications||{})[code]) { setRecallNotification(recallId, code, new Date().toISOString().slice(0,10)); }
   }
+  try {
+    if (navigator.clipboard && window.ClipboardItem) {
+      const item = new ClipboardItem({ 'text/html': new Blob([html], {type:'text/html'}), 'text/plain': new Blob([body], {type:'text/plain'}) });
+      navigator.clipboard.write([item]).then(function(){ _finishNotify(true); }, function(){ _finishNotify(false); });
+    } else { _finishNotify(false); }
+  } catch(e){ _finishNotify(false); }
 }
 
 
