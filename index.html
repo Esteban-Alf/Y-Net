@@ -364,6 +364,7 @@ textarea{resize:vertical;min-height:60px;}
     <div class="nav-item" data-page="concesionarios"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 9l9-6 9 6v10a2 2 0 0 1-2 2h-14a2 2 0 0 1-2-2z"/><path d="M9 21V12h6v9"/></svg> Concesionarios</div>
     <div class="nav-item" data-page="analisis"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg> Desarrollo de Actividades</div>
     <div class="nav-item" data-page="recall"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg> Recall</div>
+    <div class="nav-item" data-page="evaldlr"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></svg> Evaluación Dlr</div>
     <div class="nav-item" data-page="viajes"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12l3-9 6 6 6-6 3 9-3 9-6-6-6 6z"/></svg> Viajes</div>
     <div class="nav-item" data-page="capacitaciones"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5a6 3 0 0 0 12 0v-5"/></svg> Capacitaciones</div>
 
@@ -535,6 +536,18 @@ textarea{resize:vertical;min-height:60px;}
       <div id="recall-container"></div>
       <div id="recall-detail" style="display:none;"></div>
     </div>
+  </div>
+
+  <!-- EVALUACIÓN DLR -->
+  <div class="page" id="page-evaldlr">
+    <div class="ph">
+      <div><div class="ph-title">Evaluación Dlr</div><div class="ph-sub">Desempeño mensual de concesionarios</div></div>
+      <div class="ph-actions">
+        <button class="btn btn-primary" id="evd-import-btn" onclick="triggerDlrImport()">↑ Importar Excel de reclamos</button>
+        <input type="file" id="evd-file" accept=".xlsx,.xls" style="display:none;" onchange="importDlrClaims(this)">
+      </div>
+    </div>
+    <div class="content"><div id="evaldlr-container"></div></div>
   </div>
 
   <!-- VISITAS -->
@@ -1597,7 +1610,7 @@ function findUserByZE(ze) {
 }
 // Which pages each role can see — EDITABLE por el administrador.
 const DEFAULT_ROLE_PAGES = {
-  garantias:      ['dashboard','panel','contador','concesionarios','analisis','recall','viajes','capacitaciones','biblioteca'],
+  garantias:      ['dashboard','panel','contador','concesionarios','analisis','recall','evaldlr','viajes','capacitaciones','biblioteca'],
   tecnica:        ['dashboard','panel','contador','concesionarios','viajes','capacitaciones','biblioteca'],
   repuestos:      ['dashboard','panel','contador','concesionarios','viajes','capacitaciones','biblioteca'],
   comercial:      ['dashboard','panel','contador','concesionarios','viajes','capacitaciones','biblioteca'],
@@ -1608,6 +1621,11 @@ let ROLE_PAGES = JSON.parse(localStorage.getItem('gg_role_pages_v1') || 'null') 
 // El administrador siempre ve todos los módulos de gestión.
 ROLE_PAGES.admin = ['admin-panel','soporte','usuarios','areas','comunicados'];
 function saveRolePages() { localStorage.setItem('gg_role_pages_v1', JSON.stringify(ROLE_PAGES)); }
+// Asegurar páginas nuevas en configuraciones cacheadas
+if (ROLE_PAGES.garantias && ROLE_PAGES.garantias.indexOf('evaldlr') === -1) {
+  const _rp = ROLE_PAGES.garantias.indexOf('recall');
+  if (_rp !== -1) ROLE_PAGES.garantias.splice(_rp+1, 0, 'evaldlr'); else ROLE_PAGES.garantias.push('evaldlr');
+}
 // Admin-only pages (distinct from area pages)
 const ADMIN_PAGES = ['admin-panel','soporte','usuarios','areas','comunicados'];
 // Pages whose DATA is shared across all roles (everyone sees the same)
@@ -2085,6 +2103,7 @@ const STORAGE = {
   counter: 'gg_counter_v1',
   cases: 'gg_cases_v1',
   recalls: 'gg_recalls_v1',
+  dlrClaims: 'gg_dlr_claims_v1',
   visits: 'gg_visits_v1',
   trainings: 'gg_trainings_v1',
   objectives: 'gg_objectives_v1',
@@ -2131,6 +2150,7 @@ let activities = load(STORAGE.activities);
 let counterLog = load(STORAGE.counter);
 let cases = load(STORAGE.cases);
 let recalls = load(STORAGE.recalls);
+let dlrClaims = load(STORAGE.dlrClaims);
 let visits = load(STORAGE.visits);
 let trips = load(STORAGE.trips);
 let tripVisits = load(STORAGE.tripVisits);
@@ -2314,6 +2334,7 @@ document.querySelectorAll('.nav-item').forEach(el => {
     if (page === 'concesionarios') renderDealers();
     if (page === 'analisis') renderCases();
     if (page === 'recall') renderRecalls();
+    if (page === 'evaldlr') renderEvalDlr();
     if (page === 'viajes') renderTrips();
     if (page === 'capacitaciones') renderTrainings();
     if (page === 'biblioteca') renderLibrary();
@@ -5659,7 +5680,7 @@ function notifyDealerByMail(recallId, code) {
   html += '<li>Realizar seguimiento periódico del progreso de la campaña.</li>';
   html += '<li>Auditar mensualmente el proceso hasta la finalización de la campaña.</li>';
   html += '</ul>';
-  html += 'Aclaro que, hasta tanto no se acuerde el objetivo de cumplimiento y la metodología de trabajo, no realizaremos ninguna medición de desempeño. En esta primera etapa, la prioridad es establecer un esquema de trabajo claro, realista y beneficioso para ambas partes.<br><br>';
+  html += '<font color="' + RED + '"><span style="color:' + RED + ';">Aclaro que, hasta tanto no se acuerde el objetivo de cumplimiento y la metodología de trabajo, no realizaremos ninguna medición de desempeño. En esta primera etapa, la prioridad es establecer un esquema de trabajo claro, realista y beneficioso para ambas partes.</span></font><br><br>';
   html += 'Desde Yamaha estaremos acompañándolos durante todo el proceso.<br><br>';
   html += 'Agradeceremos su confirmación de recepción para iniciar el diálogo y coordinar los próximos pasos.<br><br>';
   html += 'Quedamos a disposición ante cualquier consulta.<br><br>';
@@ -5695,7 +5716,7 @@ function notifyDealerByMail(recallId, code) {
   const mailto = 'mailto:' + encodeURIComponent(firstEmail) + '?subject=' + encodeURIComponent(subject); // cuerpo vacío: el texto va por portapapeles
   function _finishNotify(copied){
     alert(copied
-      ? 'Copiamos el correo con formato (negritas) al portapapeles. Se abre el mail con el destinatario y el asunto: pegá con Ctrl+V (o Cmd+V) en el cuerpo.'
+      ? 'Copiamos el correo con formato (negritas y rojo) al portapapeles. Se abre el mail con el destinatario y el asunto: pegá con Ctrl+V (o Cmd+V) en el cuerpo.'
       : 'Se abrió el correo con el destinatario y el asunto. (Tu navegador no permitió copiar el texto con formato; copialo desde el detalle de la campaña.)');
     window.location.href = mailto;
     if (!(r.notifications||{})[code]) { setRecallNotification(recallId, code, new Date().toISOString().slice(0,10)); }
@@ -6236,6 +6257,211 @@ function saveRecall() {
   else renderRecalls();
 }
 function deleteRecall() { if (!requireSharedEdit()) return; if (!confirm('¿Eliminar campaña?')) return; recalls = recalls.filter(r => r.id !== editingRecallId); save(STORAGE.recalls, recalls); closeModal('modal-recall'); renderRecalls(); }
+
+// ============ EVALUACIÓN DLR ============
+let _evdPeriod = null;
+let _evdOpen = {};
+function normDealerCode(v){
+  if (v === null || v === undefined) return '';
+  let s = String(v).trim();
+  if (s === '') return '';
+  if (/^\d+$/.test(s)) return s.padStart(6,'0');
+  return s;
+}
+function normClaimStatus(v){
+  const s = String(v||'').trim().toLowerCase();
+  if (s.indexOf('appr')===0 || s.indexOf('aprob')===0) return 'Aprobado';
+  if (s.indexOf('rej')===0 || s.indexOf('rechaz')===0) return 'Rechazado';
+  if (s.indexOf('open')===0 || s.indexOf('abier')===0 || s.indexOf('pend')===0) return 'Abierto';
+  if (!s) return '';
+  return String(v).charAt(0).toUpperCase() + String(v).slice(1);
+}
+function evdPeriodLabel(p){
+  if (!p) return '';
+  if (p.slice(-5) === '-ACUM') return 'Acumulado ' + p.slice(0,4);
+  if (/^\d{4}-\d{2}$/.test(p)) { const d = new Date(p+'-01T00:00:00'); const l = d.toLocaleDateString('es-AR',{month:'long',year:'numeric'}); return l.charAt(0).toUpperCase()+l.slice(1); }
+  return p;
+}
+function evdPeriodOptions(){
+  const set = [];
+  const year = new Date().getFullYear();
+  set.push(year+'-ACUM');
+  for (let m=1;m<=12;m++) set.push(year+'-'+String(m).padStart(2,'0'));
+  (dlrClaims||[]).forEach(function(s){ if (set.indexOf(s.period)===-1) set.push(s.period); });
+  return set;
+}
+function setEvdPeriod(v){ _evdPeriod = v; renderEvalDlr(); }
+function triggerDlrImport(){ if (!requireSharedEdit()) return; const f = document.getElementById('evd-file'); if (f) f.click(); }
+function importDlrClaims(input){
+  if (!requireSharedEdit()) { input.value=''; return; }
+  const file = input.files && input.files[0]; if (!file) return;
+  const period = _evdPeriod || (new Date().getFullYear()+'-ACUM');
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      if (!rows.length) { alert('El archivo está vacío.'); input.value=''; return; }
+      const header = rows[0].map(function(hh){ return String(hh).trim().toLowerCase(); });
+      const findCol = function(names){ for (let i=0;i<names.length;i++){ const k=header.indexOf(names[i]); if (k!==-1) return k; } return -1; };
+      const iNo = findCol(['dealer no.','dealer no','dealer number','nro','nro.','codigo','código','code']);
+      const iName = findCol(['dealer name','nombre','concesionario','name']);
+      const iType = findCol(['claim type','tipo','tipo de reclamo','type']);
+      const iStatus = findCol(['claim status','status','estado']);
+      const iDetail = findCol(['unificado','detalle','descripcion','descripción','motivo','observacion','observación']);
+      const iInv = findCol(['factura','invoice','nro factura','n° factura','comprobante']);
+      const claims = [];
+      for (let r=1;r<rows.length;r++){
+        const row = rows[r]; if (!row) continue;
+        const allEmpty = row.every(function(cc){ return String(cc).trim()===''; });
+        if (allEmpty) continue;
+        const dno = normDealerCode(iNo>=0 ? row[iNo] : '');
+        const dname = iName>=0 ? String(row[iName]).trim() : '';
+        if (!dno && !dname) continue;
+        claims.push({
+          dno: dno, dname: dname,
+          type: iType>=0 ? String(row[iType]).trim() : '',
+          status: normClaimStatus(iStatus>=0 ? row[iStatus] : ''),
+          detail: iDetail>=0 ? String(row[iDetail]).trim() : '',
+          invoice: iInv>=0 ? String(row[iInv]).trim() : ''
+        });
+      }
+      if (!claims.length){ alert('No encontré reclamos. Verificá que el Excel tenga los encabezados: Dealer No., Dealer Name, Claim Type, Claim Status, Unificado, Factura.'); input.value=''; return; }
+      dlrClaims = (dlrClaims||[]).filter(function(s){ return s.period !== period; });
+      dlrClaims.push({ id:'ev'+Date.now(), period:period, importedAt:new Date().toISOString(), fileName:file.name, claims:claims });
+      save(STORAGE.dlrClaims, dlrClaims);
+      input.value='';
+      renderEvalDlr();
+      alert('Importados '+claims.length+' reclamos en el período "'+evdPeriodLabel(period)+'".');
+    } catch(err){ alert('Error al leer el Excel: '+err.message); input.value=''; }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function evdAggregate(snap){
+  const map = {};
+  (snap.claims||[]).forEach(function(c){
+    const key = c.dno || c.dname;
+    if (!map[key]) map[key] = { key:key, dno:c.dno, dname:c.dname, total:0, aprob:0, rech:0, abierto:0, fact:0, aprobSinFact:0, byType:{}, claims:[] };
+    const g = map[key];
+    if (!g.dname && c.dname) g.dname = c.dname;
+    g.total++; g.claims.push(c);
+    g.byType[c.type||'—'] = (g.byType[c.type||'—']||0)+1;
+    if (c.status==='Aprobado'){ g.aprob++; if (c.invoice) g.fact++; else g.aprobSinFact++; }
+    else if (c.status==='Rechazado'){ g.rech++; }
+    else { g.abierto++; }
+  });
+  return Object.keys(map).map(function(k){ return map[k]; });
+}
+function evdColor(pct){ return pct>=80 ? '#047857' : pct>=60 ? '#D97706' : '#E60012'; }
+function evdBar(label, pct){
+  const col = evdColor(pct);
+  return '<div style="margin-bottom:7px;"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;"><span style="color:var(--text-muted);">'+esc(label)+'</span><b style="color:'+col+';">'+pct+'%</b></div><div class="progress"><div class="progress-bar" style="width:'+pct+'%;background:'+col+';"></div></div></div>';
+}
+function evdChip(txt, bg, col){ return '<span style="font-size:10.5px;font-weight:600;color:'+col+';background:'+bg+';padding:3px 9px;border-radius:10px;">'+esc(txt)+'</span>'; }
+function toggleEvdDealer(key){ _evdOpen[key] = !_evdOpen[key]; renderEvalDlr(); }
+function renderEvalDlr(){
+  const c = document.getElementById('evaldlr-container'); if (!c) return;
+  const importBtn = document.getElementById('evd-import-btn');
+  if (importBtn) importBtn.style.display = canEditShared() ? '' : 'none';
+  const opts = evdPeriodOptions();
+  if (!_evdPeriod){
+    if ((dlrClaims||[]).length){ const sorted = dlrClaims.slice().sort(function(a,b){ return (b.importedAt||'').localeCompare(a.importedAt||''); }); _evdPeriod = sorted[0].period; }
+    else _evdPeriod = new Date().getFullYear()+'-ACUM';
+  }
+  let h = '';
+  h += '<div class="card" style="margin-bottom:16px;padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">';
+  h += '<label style="font-size:12px;color:var(--text-secondary);font-weight:600;">Período:</label>';
+  h += '<select onchange="setEvdPeriod(this.value)" style="font-size:12.5px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;">';
+  opts.forEach(function(p){ h += '<option value="'+p+'" '+(p===_evdPeriod?'selected':'')+'>'+esc(evdPeriodLabel(p))+'</option>'; });
+  h += '</select>';
+  const snap = (dlrClaims||[]).find(function(s){ return s.period===_evdPeriod; });
+  if (snap) h += '<span style="font-size:11px;color:var(--text-muted);">'+(snap.claims||[]).length+' reclamos · '+esc(snap.fileName||'')+' · '+(snap.importedAt||'').slice(0,10)+'</span>';
+  h += '</div>';
+
+  if (!snap || !(snap.claims||[]).length){
+    h += '<div class="card" style="text-align:center;padding:30px 16px;color:var(--text-muted);font-size:13px;">';
+    h += 'No hay reclamos importados para <b>'+esc(evdPeriodLabel(_evdPeriod))+'</b>.';
+    if (canEditShared()) h += '<br>Dejá el período elegido y usá <b>"↑ Importar Excel de reclamos"</b> arriba a la derecha.';
+    h += '</div>';
+    c.innerHTML = h; return;
+  }
+
+  const groups = evdAggregate(snap);
+  const tot = snap.claims.length;
+  const totAprob = groups.reduce(function(a,g){return a+g.aprob;},0);
+  const totRech = groups.reduce(function(a,g){return a+g.rech;},0);
+  const totFact = groups.reduce(function(a,g){return a+g.fact;},0);
+  const totSinFact = groups.reduce(function(a,g){return a+g.aprobSinFact;},0);
+  const pctAprobGlobal = tot ? Math.round(totAprob/tot*100) : 0;
+  const pctFactGlobal = totAprob ? Math.round(totFact/totAprob*100) : 0;
+
+  h += '<div class="card" style="margin-bottom:16px;"><div class="card-h"><div class="card-title">📊 Resumen del período</div></div>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+  h += monthlyKpiBox('Reclamos', tot, '#374151');
+  h += monthlyKpiBox('Aprobados', totAprob, '#047857');
+  h += monthlyKpiBox('Rechazados', totRech, '#E60012');
+  h += monthlyKpiBox('Facturados', totFact, '#1E40AF');
+  h += monthlyKpiBox('Aprob. sin facturar', totSinFact, '#D97706');
+  h += monthlyKpiBox('Concesionarios', groups.length, '#6D28D9');
+  h += '</div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:14px;">';
+  h += '<div>'+evdBar('Aprobación global', pctAprobGlobal)+'</div>';
+  h += '<div>'+evdBar('Facturación de aprobados', pctFactGlobal)+'</div>';
+  h += '</div></div>';
+
+  groups.forEach(function(g){ g._pa = g.total ? Math.round(g.aprob/g.total*100) : 0; g._pf = g.aprob ? Math.round(g.fact/g.aprob*100) : 0; });
+  groups.sort(function(a,b){ return a._pa - b._pa || b.total - a.total; });
+
+  h += '<div class="card"><div class="card-h"><div class="card-title">🏢 Por concesionario ('+groups.length+')</div></div>';
+  h += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">Ordenados por menor % de aprobación (los que más atención necesitan, primero).</div>';
+  groups.forEach(function(g){
+    const key = g.key;
+    const open = !!_evdOpen[key];
+    const keyJs = String(key).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    const col = evdColor(g._pa);
+    h += '<div style="border:1px solid var(--border);border-radius:10px;padding:12px 13px;margin-bottom:10px;">';
+    h += '<div onclick="toggleEvdDealer(\''+keyJs+'\')" style="display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;flex-wrap:wrap;">';
+    h += '<div style="display:flex;align-items:center;gap:9px;min-width:0;">';
+    h += '<span style="width:11px;height:11px;border-radius:50%;background:'+col+';flex-shrink:0;"></span>';
+    h += '<div style="min-width:0;"><div style="font-weight:700;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(g.dname||'—')+'</div><div style="font-size:11px;color:var(--text-muted);">'+(g.dno?'#'+esc(g.dno)+' · ':'')+g.total+' reclamos</div></div>';
+    h += '</div>';
+    h += '<div style="display:flex;gap:14px;align-items:center;flex-shrink:0;">';
+    h += '<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:'+evdColor(g._pa)+';">'+g._pa+'%</div><div style="font-size:9.5px;color:var(--text-muted);text-transform:uppercase;">aprob.</div></div>';
+    h += '<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:'+evdColor(g._pf)+';">'+g._pf+'%</div><div style="font-size:9.5px;color:var(--text-muted);text-transform:uppercase;">factur.</div></div>';
+    h += '<span style="font-size:13px;color:var(--text-muted);">'+(open?'▾':'▸')+'</span>';
+    h += '</div></div>';
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;">';
+    h += evdChip('Aprobados '+g.aprob, '#ECFDF5', '#047857');
+    h += evdChip('Rechazados '+g.rech, '#FEF2F2', '#E60012');
+    h += evdChip('Facturados '+g.fact, '#EFF6FF', '#1E40AF');
+    h += evdChip('Aprob. sin facturar '+g.aprobSinFact, '#FFFBEB', '#B45309');
+    if (g.abierto) h += evdChip('Abiertos '+g.abierto, '#F3F4F6', '#374151');
+    h += '</div>';
+    const typeStr = Object.keys(g.byType).map(function(t){ return esc(t)+': '+g.byType[t]; }).join(' · ');
+    if (typeStr) h += '<div style="font-size:11px;color:var(--text-muted);margin-top:7px;">'+typeStr+'</div>';
+    if (open){
+      h += '<div style="margin-top:11px;border-top:1px solid var(--border);padding-top:6px;">';
+      g.claims.forEach(function(cl){
+        const stCol = cl.status==='Aprobado'?'#047857':cl.status==='Rechazado'?'#E60012':'#6B7280';
+        const stBg = cl.status==='Aprobado'?'#ECFDF5':cl.status==='Rechazado'?'#FEF2F2':'#F3F4F6';
+        const facTxt = cl.invoice ? ' · facturado' : (cl.status==='Aprobado' ? ' · sin facturar' : '');
+        h += '<div style="padding:7px 0;border-bottom:1px dashed var(--border);">';
+        h += '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;">';
+        h += '<span style="font-size:11.5px;font-weight:600;">'+esc(cl.type||'—')+'</span>';
+        h += '<span style="font-size:10.5px;font-weight:700;color:'+stCol+';background:'+stBg+';padding:2px 8px;border-radius:10px;">'+esc(cl.status||'—')+facTxt+'</span>';
+        h += '</div>';
+        if (cl.detail) h += '<div style="font-size:11.5px;color:var(--text-secondary);margin-top:3px;">'+esc(cl.detail)+'</div>';
+        if (cl.invoice) h += '<div style="font-size:10.5px;color:var(--text-muted);margin-top:2px;">Factura: '+esc(cl.invoice)+'</div>';
+        h += '</div>';
+      });
+      h += '</div>';
+    }
+    h += '</div>';
+  });
+  h += '</div>';
+  c.innerHTML = h;
+}
 
 // ============ VISITS ============
 function renderVisits() {
