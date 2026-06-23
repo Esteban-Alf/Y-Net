@@ -6262,6 +6262,8 @@ function deleteRecall() { if (!requireSharedEdit()) return; if (!confirm('¿Elim
 let _evdPeriod = null;
 let _evdOpen = {};
 let _evdKpiOpen = {};
+let _evdSeg = 'Motos';
+let _evdRegion = 'YMARG';
 function normDealerCode(v){
   if (v === null || v === undefined) return '';
   let s = String(v).trim();
@@ -6396,16 +6398,24 @@ function importDlrClaims(input){
   };
   reader.readAsArrayBuffer(file);
 }
+function evdIsOverdue(c, now){
+  if (c.status!=='Aprobado' || c.invoice || !c.date) return false;
+  const d = new Date(c.date+'T00:00:00');
+  if (isNaN(d)) return false;
+  const deadline = new Date(d.getFullYear(), d.getMonth()+3, d.getDate());
+  return now > deadline;
+}
 function evdAggregate(claims){
+  const now = new Date();
   const map = {};
   (claims||[]).forEach(function(c){
     const key = c.dno || c.dname;
-    if (!map[key]) map[key] = { key:key, dno:c.dno, dname:c.dname, total:0, aprob:0, rech:0, abierto:0, fact:0, aprobSinFact:0, byType:{}, rcat:{proceso:0,criterio:0,admin:0,sin:0}, penal:0, claims:[] };
+    if (!map[key]) map[key] = { key:key, dno:c.dno, dname:c.dname, total:0, aprob:0, rech:0, abierto:0, fact:0, aprobSinFact:0, aprobGracia:0, aprobVencido:0, byType:{}, rcat:{proceso:0,criterio:0,admin:0,sin:0}, penal:0, claims:[] };
     const g = map[key];
     if (!g.dname && c.dname) g.dname = c.dname;
     g.total++; g.claims.push(c);
     g.byType[c.type||'—'] = (g.byType[c.type||'—']||0)+1;
-    if (c.status==='Aprobado'){ g.aprob++; if (c.invoice) g.fact++; else g.aprobSinFact++; }
+    if (c.status==='Aprobado'){ g.aprob++; if (c.invoice) g.fact++; else { g.aprobSinFact++; if (evdIsOverdue(c, now)) g.aprobVencido++; else g.aprobGracia++; } }
     else if (c.status==='Rechazado'){ g.rech++; const cat=c.rcat||evdClassifyReject(c.detail); g.rcat[cat]=(g.rcat[cat]||0)+1; g.penal += (EVD_REJECT_CATS[cat]?EVD_REJECT_CATS[cat].pts:0); }
     else { g.abierto++; }
   });
@@ -6418,7 +6428,7 @@ function evdScore(g){
   const sevDen = g.rech - (g.rcat.sin||0);
   let subSev = g.rech===0 ? 100 : (sevDen>0 ? Math.round((3 - (g.penal/sevDen))/2*100) : 100);
   subSev = Math.max(0, Math.min(100, subSev));
-  const pf = g.aprob>0 ? Math.round(g.fact/g.aprob*100) : null;
+  const pf = g.aprob>0 ? Math.round((g.aprob - g.aprobVencido)/g.aprob*100) : null;
   const parts = [];
   if (pa!==null) parts.push([0.5, pa]);
   parts.push([0.3, subSev]);
@@ -6428,6 +6438,55 @@ function evdScore(g){
   const label = score>=75 ? 'Bueno' : score>=50 ? 'Mejorable' : 'Malo';
   const color = score>=75 ? '#047857' : score>=50 ? '#D97706' : '#E60012';
   return { score:score, label:label, color:color, pa:pa, subSev:subSev, pf:pf };
+}
+function evdSegMatch(d, seg){
+  const s = String(d.seg||'').toUpperCase();
+  if (seg==='Motos') return s.indexOf('MTS')!==-1;
+  if (seg==='Marina') return s.indexOf('MR')!==-1;
+  return false;
+}
+function evdCalifMapForPeriod(){
+  const claims = evdClaimsForPeriod(_evdPeriod);
+  const groups = evdAggregate(claims);
+  const map = {};
+  groups.forEach(function(g){ if (g.dno){ const sc = evdScore(g); map[g.dno] = sc.label==='Bueno'?2:(sc.label==='Mejorable'?1:0); } });
+  return map;
+}
+function evdScoreMapForMonth(month){
+  const cl = (dlrClaims||[]).filter(function(c){ return c.month===month; });
+  const groups = evdAggregate(cl);
+  const map = {};
+  groups.forEach(function(g){ if (g.dno) map[g.dno] = evdScore(g).score; });
+  return map;
+}
+function evdExportResultados(){
+  const califMap = evdCalifMapForPeriod();
+  const wb = XLSX.utils.book_new();
+  ['Motos','Marina'].forEach(function(seg){
+    const list = (DEALERS||[]).filter(function(d){ return d.code && evdSegMatch(d, seg); });
+    list.sort(function(a,b){ return (b.priority?1:0)-(a.priority?1:0) || String(a.n).localeCompare(String(b.n)); });
+    const aoa = [['NOMBRE CONCESIONARIO','Nro Dlr','Prioritarios','Reclamos (41)','Recall (42)','Guarda (43)','Responsable (44)']];
+    list.forEach(function(d){
+      const code = normDealerCode(d.code);
+      aoa.push([d.n, code, d.priority?'SI':'NO', (califMap[code]!==undefined?califMap[code]:''), '', '', '']);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [{wch:40},{wch:10},{wch:11},{wch:12},{wch:11},{wch:11},{wch:14}];
+    XLSX.utils.book_append_sheet(wb, ws, seg);
+  });
+  const fname = sanitizeFileName('Analisis de desempeño - Garantías - ' + evdPeriodLabel(_evdPeriod)) + '.xlsx';
+  XLSX.writeFile(wb, fname);
+}
+function evdEnviarResultados(){
+  evdExportResultados();
+  const mes = evdPeriodLabel(_evdPeriod);
+  const subject = 'Analisis de desempeño - Garantías - ' + _evdSeg + ' - ' + _evdRegion;
+  let body = 'Buenos días,\n\n';
+  body += 'Adjuntamos el análisis de desempeño de la red sobre el mes de ' + mes + '.\n\n';
+  body += 'Ante cualquier consulta a disposición.\n\n';
+  body += 'Saludos,';
+  alert('Descargamos el Excel de resultados. En el correo que se abre, adjuntá ese archivo antes de enviarlo.');
+  window.location.href = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
 }
 function evdBar(label, pct){
   const col = evdColor(pct);
@@ -6458,6 +6517,15 @@ function renderEvalDlr(){
   h += '</select>';
   const claims = evdClaimsForPeriod(_evdPeriod);
   h += '<span style="font-size:11px;color:var(--text-muted);">'+claims.length+' reclamos</span>';
+  h += '</div>';
+
+  h += '<div class="card" style="margin-bottom:16px;padding:12px 14px;display:flex;gap:9px;align-items:center;flex-wrap:wrap;">';
+  h += '<span style="font-size:12px;font-weight:700;color:var(--text-secondary);">Devolución mensual:</span>';
+  h += '<select onchange="_evdSeg=this.value" style="font-size:12px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;"><option value="Motos"'+(_evdSeg==='Motos'?' selected':'')+'>Motos</option><option value="Marina"'+(_evdSeg==='Marina'?' selected':'')+'>Marina</option></select>';
+  h += '<select onchange="_evdRegion=this.value" style="font-size:12px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;"><option value="YMARG"'+(_evdRegion==='YMARG'?' selected':'')+'>YMARG</option><option value="YMUY"'+(_evdRegion==='YMUY'?' selected':'')+'>YMUY</option></select>';
+  h += '<button class="btn btn-ghost btn-sm" onclick="evdExportResultados()">↓ Exportar resultados</button>';
+  h += '<button class="btn btn-primary btn-sm" onclick="evdEnviarResultados()">✉ Enviar resultados</button>';
+  h += '<span style="font-size:10.5px;color:var(--text-muted);width:100%;">El Excel sale con las hojas Motos y Marina y la columna Reclamos (41) cargada con 2/1/0 (2 bien · 1 regular · 0 mal). El asunto del mail usa Segmento + Región.</span>';
   h += '</div>';
 
   if (!claims.length){
@@ -6516,8 +6584,14 @@ function renderEvalDlr(){
   h += '<div>'+evdBar('Facturación de aprobados', pctFactGlobal)+'</div>';
   h += '</div></div>';
 
-  groups.forEach(function(g){ g._pa = g.total ? Math.round(g.aprob/g.total*100) : 0; g._pf = g.aprob ? Math.round(g.fact/g.aprob*100) : 0; g._sc = evdScore(g); });
+  groups.forEach(function(g){ g._pa = g.total ? Math.round(g.aprob/g.total*100) : 0; g._pf = g.aprob ? Math.round((g.aprob - g.aprobVencido)/g.aprob*100) : 0; g._sc = evdScore(g); });
   groups.sort(function(a,b){ return a._sc.score - b._sc.score || b.total - a.total; });
+
+  let prevMap = null, prevLabel = '';
+  if (/^\d{4}-\d{2}$/.test(_evdPeriod)){
+    const am = evdAllMonths(); const idx = am.indexOf(_evdPeriod);
+    if (idx > 0){ prevMap = evdScoreMapForMonth(am[idx-1]); prevLabel = evdPeriodLabel(am[idx-1]); }
+  }
 
   h += '<div class="card"><div class="card-h"><div class="card-title">🏢 Por concesionario ('+groups.length+')</div></div>';
   h += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">Ordenados por menor calificación (los que más atención necesitan, primero). Calificación = 50% aprobación + 30% severidad de rechazos + 20% facturación.</div>';
@@ -6534,7 +6608,15 @@ function renderEvalDlr(){
     h += '</div>';
     h += '<div style="display:flex;gap:14px;align-items:center;flex-shrink:0;">';
     h += '<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:'+evdColor(g._pa)+';">'+g._pa+'%</div><div style="font-size:9.5px;color:var(--text-muted);text-transform:uppercase;">aprob.</div></div>';
-    h += '<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:'+evdColor(g._pf)+';">'+g._pf+'%</div><div style="font-size:9.5px;color:var(--text-muted);text-transform:uppercase;">factur.</div></div>';
+    h += '<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:'+evdColor(g._pf)+';">'+g._pf+'%</div><div style="font-size:9.5px;color:var(--text-muted);text-transform:uppercase;">factur. 3m</div></div>';
+    let trendHtml = '';
+    if (prevMap && prevMap[g.dno] !== undefined){
+      const dlt = g._sc.score - prevMap[g.dno];
+      trendHtml = dlt>0 ? '<span title="Mejoró '+dlt+' pts vs '+esc(prevLabel)+'" style="color:#047857;font-weight:800;font-size:12px;white-space:nowrap;">▲ '+dlt+'</span>'
+        : (dlt<0 ? '<span title="Bajó '+Math.abs(dlt)+' pts vs '+esc(prevLabel)+'" style="color:#E60012;font-weight:800;font-size:12px;white-space:nowrap;">▼ '+Math.abs(dlt)+'</span>'
+        : '<span title="Sin cambios vs '+esc(prevLabel)+'" style="color:#9AA0A8;font-size:12px;">▬</span>');
+    }
+    if (trendHtml) h += trendHtml;
     h += '<span style="font-size:10px;font-weight:800;color:#fff;background:'+g._sc.color+';padding:4px 10px;border-radius:11px;white-space:nowrap;">'+g._sc.label+' · '+g._sc.score+'</span>';
     h += '<span style="font-size:13px;color:var(--text-muted);">'+(open?'▾':'▸')+'</span>';
     h += '</div></div>';
@@ -6542,7 +6624,8 @@ function renderEvalDlr(){
     h += evdChip('Aprobados '+g.aprob, '#ECFDF5', '#047857');
     h += evdChip('Rechazados '+g.rech, '#FEF2F2', '#E60012');
     h += evdChip('Facturados '+g.fact, '#EFF6FF', '#1E40AF');
-    h += evdChip('Aprob. sin facturar '+g.aprobSinFact, '#FFFBEB', '#B45309');
+    if (g.aprobGracia) h += evdChip('Sin facturar (en plazo) '+g.aprobGracia, '#F3F4F6', '#374151');
+    if (g.aprobVencido) h += evdChip('Vencidos sin facturar '+g.aprobVencido, '#FEF2F2', '#E60012');
     if (g.abierto) h += evdChip('Abiertos '+g.abierto, '#F3F4F6', '#374151');
     h += '</div>';
     if (g.rech){
@@ -6554,13 +6637,15 @@ function renderEvalDlr(){
     }
     const typeStr = Object.keys(g.byType).map(function(t){ return esc(t)+': '+g.byType[t]; }).join(' · ');
     if (typeStr) h += '<div style="font-size:11px;color:var(--text-muted);margin-top:7px;">'+typeStr+'</div>';
-    h += '<div style="font-size:11px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);">Calificación: <b style="color:'+g._sc.color+';">'+g._sc.label+' ('+g._sc.score+'/100)</b> <span style="color:var(--text-muted);">— Aprobación '+(g._sc.pa===null?'s/d':g._sc.pa+'%')+' · Severidad '+g._sc.subSev+'/100 · Facturación '+(g._sc.pf===null?'s/d':g._sc.pf+'%')+'</span></div>';
+    h += '<div style="font-size:11px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);">Calificación: <b style="color:'+g._sc.color+';">'+g._sc.label+' ('+g._sc.score+'/100)</b> <span style="color:var(--text-muted);">— Aprobación '+(g._sc.pa===null?'s/d':g._sc.pa+'%')+' · Severidad '+g._sc.subSev+'/100 · Facturación 3m '+(g._sc.pf===null?'s/d':g._sc.pf+'%')+'</span></div>';
     if (open){
       h += '<div style="margin-top:11px;border-top:1px solid var(--border);padding-top:6px;">';
       g.claims.forEach(function(cl){
         const stCol = cl.status==='Aprobado'?'#047857':cl.status==='Rechazado'?'#E60012':'#6B7280';
         const stBg = cl.status==='Aprobado'?'#ECFDF5':cl.status==='Rechazado'?'#FEF2F2':'#F3F4F6';
-        const facTxt = cl.invoice ? ' · facturado' : (cl.status==='Aprobado' ? ' · sin facturar' : '');
+        let facTxt = '';
+        if (cl.invoice) facTxt = ' · facturado';
+        else if (cl.status==='Aprobado') facTxt = evdIsOverdue(cl, new Date()) ? ' · vencido sin facturar' : ' · sin facturar (en plazo)';
         const dts = cl.date ? cl.date.split('-').reverse().join('/') : '';
         h += '<div style="padding:7px 0;border-bottom:1px dashed var(--border);">';
         h += '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;">';
