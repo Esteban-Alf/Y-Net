@@ -6261,6 +6261,7 @@ function deleteRecall() { if (!requireSharedEdit()) return; if (!confirm('¿Elim
 // ============ EVALUACIÓN DLR ============
 let _evdPeriod = null;
 let _evdOpen = {};
+let _evdKpiOpen = {};
 function normDealerCode(v){
   if (v === null || v === undefined) return '';
   let s = String(v).trim();
@@ -6276,30 +6277,81 @@ function normClaimStatus(v){
   if (!s) return '';
   return String(v).charAt(0).toUpperCase() + String(v).slice(1);
 }
+function evdParseDate(v){
+  if (v === '' || v === null || v === undefined) return '';
+  if (v instanceof Date && !isNaN(v)) return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0');
+  if (typeof v === 'number'){ const d = new Date(Math.round((v-25569)*86400*1000)); return isNaN(d)?'':d.toISOString().slice(0,10); }
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (m) return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/); if (m) return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  const d = new Date(s); return isNaN(d)?'':d.toISOString().slice(0,10);
+}
+const EVD_REJECT_CATS = {
+  proceso:  { label:'Proceso', pts:3, color:'#E60012' },
+  criterio: { label:'Error de criterio', pts:2, color:'#D97706' },
+  admin:    { label:'Administrativo', pts:1, color:'#1E40AF' },
+  sin:      { label:'Sin clasificar', pts:0, color:'#6B7280' }
+};
+function evdClassifyReject(detail){
+  const s = String(detail||'').toLowerCase();
+  if (/no corresponde|unidad no reparada|no reparada|pieza no corresponde/.test(s)) return 'proceso';
+  if (/falta inform|falta de inform|evidencia|fotos|mala confecc|faltan datos|no se evidencia|integridad erronea|no observ|rto|mano de obra|contactar a garant/.test(s)) return 'criterio';
+  if (/cantidad cero|cantidad 0|duplicad|fuera de termino|fuera de término|caduc|\baño/.test(s)) return 'admin';
+  return 'sin';
+}
 function evdPeriodLabel(p){
   if (!p) return '';
   if (p.slice(-5) === '-ACUM') return 'Acumulado ' + p.slice(0,4);
   if (/^\d{4}-\d{2}$/.test(p)) { const d = new Date(p+'-01T00:00:00'); const l = d.toLocaleDateString('es-AR',{month:'long',year:'numeric'}); return l.charAt(0).toUpperCase()+l.slice(1); }
   return p;
 }
+function evdNormalizeStore(){
+  if (!Array.isArray(dlrClaims)) { dlrClaims = []; return; }
+  if (!dlrClaims.length) return;
+  if (dlrClaims[0] && dlrClaims[0].claims !== undefined){
+    const out = [];
+    dlrClaims.forEach(function(s){
+      if (s && Array.isArray(s.claims)){
+        const mo = /^\d{4}-\d{2}$/.test(s.period||'') ? s.period : '';
+        s.claims.forEach(function(c){ out.push({ dno:c.dno, dname:c.dname, type:c.type, status:c.status, detail:c.detail, invoice:c.invoice, date:c.date||'', month:c.month||mo, rcat: c.status==='Rechazado'?evdClassifyReject(c.detail):'' }); });
+      } else if (s && s.dno !== undefined){ out.push(s); }
+    });
+    dlrClaims = out;
+    save(STORAGE.dlrClaims, dlrClaims);
+  }
+}
+function evdAllMonths(){
+  const set = {};
+  (dlrClaims||[]).forEach(function(c){ if (c.month) set[c.month]=1; });
+  return Object.keys(set).sort();
+}
 function evdPeriodOptions(){
-  const set = [];
-  const year = new Date().getFullYear();
-  set.push(year+'-ACUM');
-  for (let m=1;m<=12;m++) set.push(year+'-'+String(m).padStart(2,'0'));
-  (dlrClaims||[]).forEach(function(s){ if (set.indexOf(s.period)===-1) set.push(s.period); });
-  return set;
+  const months = evdAllMonths();
+  const years = {};
+  months.forEach(function(m){ years[m.slice(0,4)]=1; });
+  const yk = Object.keys(years).sort();
+  if (!yk.length) yk.push(String(new Date().getFullYear()));
+  const opts = [];
+  yk.forEach(function(y){ opts.push(y+'-ACUM'); });
+  months.forEach(function(m){ opts.push(m); });
+  return opts;
+}
+function evdClaimsForPeriod(period){
+  if (!period) return [];
+  if (period.slice(-5)==='-ACUM'){ const y = period.slice(0,4); return (dlrClaims||[]).filter(function(c){ return (c.month||'').slice(0,4)===y; }); }
+  return (dlrClaims||[]).filter(function(c){ return c.month===period; });
 }
 function setEvdPeriod(v){ _evdPeriod = v; renderEvalDlr(); }
+function toggleEvdDealer(key){ _evdOpen[key] = !_evdOpen[key]; renderEvalDlr(); }
+function toggleEvdKpi(id){ _evdKpiOpen[id] = !_evdKpiOpen[id]; renderEvalDlr(); }
 function triggerDlrImport(){ if (!requireSharedEdit()) return; const f = document.getElementById('evd-file'); if (f) f.click(); }
 function importDlrClaims(input){
   if (!requireSharedEdit()) { input.value=''; return; }
   const file = input.files && input.files[0]; if (!file) return;
-  const period = _evdPeriod || (new Date().getFullYear()+'-ACUM');
   const reader = new FileReader();
   reader.onload = function(e){
     try {
-      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
       if (!rows.length) { alert('El archivo está vacío.'); input.value=''; return; }
@@ -6309,9 +6361,12 @@ function importDlrClaims(input){
       const iName = findCol(['dealer name','nombre','concesionario','name']);
       const iType = findCol(['claim type','tipo','tipo de reclamo','type']);
       const iStatus = findCol(['claim status','status','estado']);
+      const iDate = findCol(['approval date','fecha','date','fecha del reclamo','fecha reclamo','fecha de aprobacion','fecha de aprobación']);
       const iDetail = findCol(['unificado','detalle','descripcion','descripción','motivo','observacion','observación']);
       const iInv = findCol(['factura','invoice','nro factura','n° factura','comprobante']);
-      const claims = [];
+      const incoming = [];
+      const monthsInFile = {};
+      let sinFecha = 0;
       for (let r=1;r<rows.length;r++){
         const row = rows[r]; if (!row) continue;
         const allEmpty = row.every(function(cc){ return String(cc).trim()===''; });
@@ -6319,55 +6374,81 @@ function importDlrClaims(input){
         const dno = normDealerCode(iNo>=0 ? row[iNo] : '');
         const dname = iName>=0 ? String(row[iName]).trim() : '';
         if (!dno && !dname) continue;
-        claims.push({
-          dno: dno, dname: dname,
-          type: iType>=0 ? String(row[iType]).trim() : '',
-          status: normClaimStatus(iStatus>=0 ? row[iStatus] : ''),
-          detail: iDetail>=0 ? String(row[iDetail]).trim() : '',
-          invoice: iInv>=0 ? String(row[iInv]).trim() : ''
-        });
+        const date = iDate>=0 ? evdParseDate(row[iDate]) : '';
+        const month = date ? date.slice(0,7) : '';
+        if (month) monthsInFile[month]=1; else sinFecha++;
+        const status = normClaimStatus(iStatus>=0 ? row[iStatus] : '');
+        const detail = iDetail>=0 ? String(row[iDetail]).trim() : '';
+        incoming.push({ dno:dno, dname:dname, type:(iType>=0?String(row[iType]).trim():''), status:status, date:date, month:month, detail:detail, invoice:(iInv>=0?String(row[iInv]).trim():''), rcat: status==='Rechazado'?evdClassifyReject(detail):'' });
       }
-      if (!claims.length){ alert('No encontré reclamos. Verificá que el Excel tenga los encabezados: Dealer No., Dealer Name, Claim Type, Claim Status, Unificado, Factura.'); input.value=''; return; }
-      dlrClaims = (dlrClaims||[]).filter(function(s){ return s.period !== period; });
-      dlrClaims.push({ id:'ev'+Date.now(), period:period, importedAt:new Date().toISOString(), fileName:file.name, claims:claims });
+      if (!incoming.length){ alert('No encontré reclamos. Verificá los encabezados: Dealer No., Dealer Name, Claim Type, Claim Status, Approval Date, Unificado, Factura.'); input.value=''; return; }
+      const mk = Object.keys(monthsInFile);
+      dlrClaims = (dlrClaims||[]).filter(function(c){ return c.month && mk.indexOf(c.month)===-1; });
+      dlrClaims = dlrClaims.concat(incoming);
       save(STORAGE.dlrClaims, dlrClaims);
       input.value='';
+      _evdPeriod = (mk.length? mk.sort()[mk.length-1].slice(0,4) : String(new Date().getFullYear()))+'-ACUM';
       renderEvalDlr();
-      alert('Importados '+claims.length+' reclamos en el período "'+evdPeriodLabel(period)+'".');
+      let msg = 'Importados '+incoming.length+' reclamos. Meses actualizados: '+(mk.length?mk.sort().join(', '):'(sin fecha)')+'.';
+      if (sinFecha) msg += '\n\nOJO: '+sinFecha+' reclamos sin fecha válida quedaron sin mes asignado.';
+      alert(msg);
     } catch(err){ alert('Error al leer el Excel: '+err.message); input.value=''; }
   };
   reader.readAsArrayBuffer(file);
 }
-function evdAggregate(snap){
+function evdAggregate(claims){
   const map = {};
-  (snap.claims||[]).forEach(function(c){
+  (claims||[]).forEach(function(c){
     const key = c.dno || c.dname;
-    if (!map[key]) map[key] = { key:key, dno:c.dno, dname:c.dname, total:0, aprob:0, rech:0, abierto:0, fact:0, aprobSinFact:0, byType:{}, claims:[] };
+    if (!map[key]) map[key] = { key:key, dno:c.dno, dname:c.dname, total:0, aprob:0, rech:0, abierto:0, fact:0, aprobSinFact:0, byType:{}, rcat:{proceso:0,criterio:0,admin:0,sin:0}, penal:0, claims:[] };
     const g = map[key];
     if (!g.dname && c.dname) g.dname = c.dname;
     g.total++; g.claims.push(c);
     g.byType[c.type||'—'] = (g.byType[c.type||'—']||0)+1;
     if (c.status==='Aprobado'){ g.aprob++; if (c.invoice) g.fact++; else g.aprobSinFact++; }
-    else if (c.status==='Rechazado'){ g.rech++; }
+    else if (c.status==='Rechazado'){ g.rech++; const cat=c.rcat||evdClassifyReject(c.detail); g.rcat[cat]=(g.rcat[cat]||0)+1; g.penal += (EVD_REJECT_CATS[cat]?EVD_REJECT_CATS[cat].pts:0); }
     else { g.abierto++; }
   });
   return Object.keys(map).map(function(k){ return map[k]; });
 }
 function evdColor(pct){ return pct>=80 ? '#047857' : pct>=60 ? '#D97706' : '#E60012'; }
+function evdScore(g){
+  const base = g.aprob + g.rech;
+  const pa = base>0 ? Math.round(g.aprob/base*100) : null;
+  const sevDen = g.rech - (g.rcat.sin||0);
+  let subSev = g.rech===0 ? 100 : (sevDen>0 ? Math.round((3 - (g.penal/sevDen))/2*100) : 100);
+  subSev = Math.max(0, Math.min(100, subSev));
+  const pf = g.aprob>0 ? Math.round(g.fact/g.aprob*100) : null;
+  const parts = [];
+  if (pa!==null) parts.push([0.5, pa]);
+  parts.push([0.3, subSev]);
+  if (pf!==null) parts.push([0.2, pf]);
+  const wsum = parts.reduce(function(a,p){return a+p[0];},0);
+  const score = wsum>0 ? Math.round(parts.reduce(function(a,p){return a+p[0]*p[1];},0)/wsum) : 0;
+  const label = score>=75 ? 'Bueno' : score>=50 ? 'Mejorable' : 'Malo';
+  const color = score>=75 ? '#047857' : score>=50 ? '#D97706' : '#E60012';
+  return { score:score, label:label, color:color, pa:pa, subSev:subSev, pf:pf };
+}
 function evdBar(label, pct){
   const col = evdColor(pct);
   return '<div style="margin-bottom:7px;"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;"><span style="color:var(--text-muted);">'+esc(label)+'</span><b style="color:'+col+';">'+pct+'%</b></div><div class="progress"><div class="progress-bar" style="width:'+pct+'%;background:'+col+';"></div></div></div>';
 }
 function evdChip(txt, bg, col){ return '<span style="font-size:10.5px;font-weight:600;color:'+col+';background:'+bg+';padding:3px 9px;border-radius:10px;">'+esc(txt)+'</span>'; }
-function toggleEvdDealer(key){ _evdOpen[key] = !_evdOpen[key]; renderEvalDlr(); }
+function evdKpiCard(id, label, value, color){
+  const open = !!_evdKpiOpen[id];
+  return '<div onclick="toggleEvdKpi(\''+id+'\')" style="cursor:pointer;flex:1;min-width:150px;border:1px solid '+(open?color:'var(--border)')+';border-radius:10px;padding:11px 13px;background:#fff;">'
+    + '<div style="font-size:21px;font-weight:800;color:'+color+';">'+value+'</div>'
+    + '<div style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:6px;">'+esc(label)+'<span>'+(open?'▾':'▸')+'</span></div></div>';
+}
 function renderEvalDlr(){
   const c = document.getElementById('evaldlr-container'); if (!c) return;
+  evdNormalizeStore();
   const importBtn = document.getElementById('evd-import-btn');
   if (importBtn) importBtn.style.display = canEditShared() ? '' : 'none';
   const opts = evdPeriodOptions();
-  if (!_evdPeriod){
-    if ((dlrClaims||[]).length){ const sorted = dlrClaims.slice().sort(function(a,b){ return (b.importedAt||'').localeCompare(a.importedAt||''); }); _evdPeriod = sorted[0].period; }
-    else _evdPeriod = new Date().getFullYear()+'-ACUM';
+  if (!_evdPeriod || opts.indexOf(_evdPeriod)===-1){
+    const months = evdAllMonths();
+    _evdPeriod = months.length ? (months[months.length-1].slice(0,4)+'-ACUM') : opts[0];
   }
   let h = '';
   h += '<div class="card" style="margin-bottom:16px;padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">';
@@ -6375,20 +6456,20 @@ function renderEvalDlr(){
   h += '<select onchange="setEvdPeriod(this.value)" style="font-size:12.5px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;">';
   opts.forEach(function(p){ h += '<option value="'+p+'" '+(p===_evdPeriod?'selected':'')+'>'+esc(evdPeriodLabel(p))+'</option>'; });
   h += '</select>';
-  const snap = (dlrClaims||[]).find(function(s){ return s.period===_evdPeriod; });
-  if (snap) h += '<span style="font-size:11px;color:var(--text-muted);">'+(snap.claims||[]).length+' reclamos · '+esc(snap.fileName||'')+' · '+(snap.importedAt||'').slice(0,10)+'</span>';
+  const claims = evdClaimsForPeriod(_evdPeriod);
+  h += '<span style="font-size:11px;color:var(--text-muted);">'+claims.length+' reclamos</span>';
   h += '</div>';
 
-  if (!snap || !(snap.claims||[]).length){
+  if (!claims.length){
     h += '<div class="card" style="text-align:center;padding:30px 16px;color:var(--text-muted);font-size:13px;">';
-    h += 'No hay reclamos importados para <b>'+esc(evdPeriodLabel(_evdPeriod))+'</b>.';
-    if (canEditShared()) h += '<br>Dejá el período elegido y usá <b>"↑ Importar Excel de reclamos"</b> arriba a la derecha.';
+    h += 'No hay reclamos para <b>'+esc(evdPeriodLabel(_evdPeriod))+'</b>.';
+    if (canEditShared()) h += '<br>Usá <b>"↑ Importar Excel de reclamos"</b> arriba a la derecha. Cada archivo actualiza los meses que contenga.';
     h += '</div>';
     c.innerHTML = h; return;
   }
 
-  const groups = evdAggregate(snap);
-  const tot = snap.claims.length;
+  const groups = evdAggregate(claims);
+  const tot = claims.length;
   const totAprob = groups.reduce(function(a,g){return a+g.aprob;},0);
   const totRech = groups.reduce(function(a,g){return a+g.rech;},0);
   const totFact = groups.reduce(function(a,g){return a+g.fact;},0);
@@ -6403,18 +6484,43 @@ function renderEvalDlr(){
   h += monthlyKpiBox('Rechazados', totRech, '#E60012');
   h += monthlyKpiBox('Facturados', totFact, '#1E40AF');
   h += monthlyKpiBox('Aprob. sin facturar', totSinFact, '#D97706');
-  h += monthlyKpiBox('Concesionarios', groups.length, '#6D28D9');
   h += '</div>';
+
+  const claimedCodes = {}; groups.forEach(function(g){ if (g.dno) claimedCodes[g.dno]=1; });
+  const noClaim = (DEALERS||[]).filter(function(d){ return d.code && !claimedCodes[normDealerCode(d.code)]; });
+  const top10 = groups.slice().sort(function(a,b){ return b.total-a.total; }).slice(0,10);
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">';
+  h += evdKpiCard('noclaim', 'Sin reclamos en el período', noClaim.length, '#B45309');
+  h += evdKpiCard('top10', 'Top 10 que más reclaman', Math.min(10, groups.length), '#6D28D9');
+  h += evdKpiCard('cant', 'Concesionarios con reclamos', groups.length, '#1E40AF');
+  h += '</div>';
+  if (_evdKpiOpen.noclaim){
+    h += '<div style="border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-top:9px;max-height:280px;overflow:auto;">';
+    h += '<div style="font-size:11.5px;font-weight:700;margin-bottom:7px;">Concesionarios sin reclamos ('+noClaim.length+')</div>';
+    noClaim.slice().sort(function(a,b){ return String(a.n).localeCompare(String(b.n)); }).forEach(function(d){
+      h += '<div style="font-size:11.5px;padding:4px 0;border-bottom:1px dashed var(--border);">'+esc(d.n)+' <span style="color:var(--text-muted);">· #'+esc(d.code)+(d.region?' · '+esc(d.region):'')+'</span></div>';
+    });
+    h += '</div>';
+  }
+  if (_evdKpiOpen.top10){
+    h += '<div style="border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-top:9px;">';
+    h += '<div style="font-size:11.5px;font-weight:700;margin-bottom:7px;">Top 10 que más reclaman</div>';
+    top10.forEach(function(g,i){
+      h += '<div style="display:flex;justify-content:space-between;font-size:11.5px;padding:4px 0;border-bottom:1px dashed var(--border);"><span>'+(i+1)+'. '+esc(g.dname||g.dno||'—')+(g.dno?' <span style="color:var(--text-muted);">#'+esc(g.dno)+'</span>':'')+'</span><b>'+g.total+'</b></div>';
+    });
+    h += '</div>';
+  }
+
   h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:14px;">';
   h += '<div>'+evdBar('Aprobación global', pctAprobGlobal)+'</div>';
   h += '<div>'+evdBar('Facturación de aprobados', pctFactGlobal)+'</div>';
   h += '</div></div>';
 
-  groups.forEach(function(g){ g._pa = g.total ? Math.round(g.aprob/g.total*100) : 0; g._pf = g.aprob ? Math.round(g.fact/g.aprob*100) : 0; });
-  groups.sort(function(a,b){ return a._pa - b._pa || b.total - a.total; });
+  groups.forEach(function(g){ g._pa = g.total ? Math.round(g.aprob/g.total*100) : 0; g._pf = g.aprob ? Math.round(g.fact/g.aprob*100) : 0; g._sc = evdScore(g); });
+  groups.sort(function(a,b){ return a._sc.score - b._sc.score || b.total - a.total; });
 
   h += '<div class="card"><div class="card-h"><div class="card-title">🏢 Por concesionario ('+groups.length+')</div></div>';
-  h += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">Ordenados por menor % de aprobación (los que más atención necesitan, primero).</div>';
+  h += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">Ordenados por menor calificación (los que más atención necesitan, primero). Calificación = 50% aprobación + 30% severidad de rechazos + 20% facturación.</div>';
   groups.forEach(function(g){
     const key = g.key;
     const open = !!_evdOpen[key];
@@ -6429,6 +6535,7 @@ function renderEvalDlr(){
     h += '<div style="display:flex;gap:14px;align-items:center;flex-shrink:0;">';
     h += '<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:'+evdColor(g._pa)+';">'+g._pa+'%</div><div style="font-size:9.5px;color:var(--text-muted);text-transform:uppercase;">aprob.</div></div>';
     h += '<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:'+evdColor(g._pf)+';">'+g._pf+'%</div><div style="font-size:9.5px;color:var(--text-muted);text-transform:uppercase;">factur.</div></div>';
+    h += '<span style="font-size:10px;font-weight:800;color:#fff;background:'+g._sc.color+';padding:4px 10px;border-radius:11px;white-space:nowrap;">'+g._sc.label+' · '+g._sc.score+'</span>';
     h += '<span style="font-size:13px;color:var(--text-muted);">'+(open?'▾':'▸')+'</span>';
     h += '</div></div>';
     h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;">';
@@ -6438,20 +6545,29 @@ function renderEvalDlr(){
     h += evdChip('Aprob. sin facturar '+g.aprobSinFact, '#FFFBEB', '#B45309');
     if (g.abierto) h += evdChip('Abiertos '+g.abierto, '#F3F4F6', '#374151');
     h += '</div>';
+    if (g.rech){
+      h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;">';
+      h += '<span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Rechazos:</span>';
+      ['proceso','criterio','admin','sin'].forEach(function(k){ if (g.rcat[k]) h += evdChip(EVD_REJECT_CATS[k].label+' '+g.rcat[k]+' ('+EVD_REJECT_CATS[k].pts+'p)', '#F9FAFB', EVD_REJECT_CATS[k].color); });
+      h += '<span style="font-size:10.5px;color:var(--text-muted);">· severidad '+g.penal+' pts</span>';
+      h += '</div>';
+    }
     const typeStr = Object.keys(g.byType).map(function(t){ return esc(t)+': '+g.byType[t]; }).join(' · ');
     if (typeStr) h += '<div style="font-size:11px;color:var(--text-muted);margin-top:7px;">'+typeStr+'</div>';
+    h += '<div style="font-size:11px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);">Calificación: <b style="color:'+g._sc.color+';">'+g._sc.label+' ('+g._sc.score+'/100)</b> <span style="color:var(--text-muted);">— Aprobación '+(g._sc.pa===null?'s/d':g._sc.pa+'%')+' · Severidad '+g._sc.subSev+'/100 · Facturación '+(g._sc.pf===null?'s/d':g._sc.pf+'%')+'</span></div>';
     if (open){
       h += '<div style="margin-top:11px;border-top:1px solid var(--border);padding-top:6px;">';
       g.claims.forEach(function(cl){
         const stCol = cl.status==='Aprobado'?'#047857':cl.status==='Rechazado'?'#E60012':'#6B7280';
         const stBg = cl.status==='Aprobado'?'#ECFDF5':cl.status==='Rechazado'?'#FEF2F2':'#F3F4F6';
         const facTxt = cl.invoice ? ' · facturado' : (cl.status==='Aprobado' ? ' · sin facturar' : '');
+        const dts = cl.date ? cl.date.split('-').reverse().join('/') : '';
         h += '<div style="padding:7px 0;border-bottom:1px dashed var(--border);">';
         h += '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;">';
-        h += '<span style="font-size:11.5px;font-weight:600;">'+esc(cl.type||'—')+'</span>';
+        h += '<span style="font-size:11.5px;font-weight:600;">'+esc(cl.type||'—')+(dts?' <span style="font-weight:400;color:var(--text-muted);">· '+esc(dts)+'</span>':'')+'</span>';
         h += '<span style="font-size:10.5px;font-weight:700;color:'+stCol+';background:'+stBg+';padding:2px 8px;border-radius:10px;">'+esc(cl.status||'—')+facTxt+'</span>';
         h += '</div>';
-        if (cl.detail) h += '<div style="font-size:11.5px;color:var(--text-secondary);margin-top:3px;">'+esc(cl.detail)+'</div>';
+        if (cl.detail){ const cat=(cl.status==='Rechazado')?(EVD_REJECT_CATS[cl.rcat]||EVD_REJECT_CATS.sin):null; h += '<div style="font-size:11.5px;color:var(--text-secondary);margin-top:3px;">'+esc(cl.detail)+(cat?' <span style="color:'+cat.color+';font-weight:600;">['+cat.label+']</span>':'')+'</div>'; }
         if (cl.invoice) h += '<div style="font-size:10.5px;color:var(--text-muted);margin-top:2px;">Factura: '+esc(cl.invoice)+'</div>';
         h += '</div>';
       });
