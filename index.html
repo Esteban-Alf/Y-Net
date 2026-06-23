@@ -6264,6 +6264,9 @@ let _evdOpen = {};
 let _evdKpiOpen = {};
 let _evdSeg = 'Motos';
 let _evdRegion = 'YMARG';
+let _evdFrom = null;
+let _evdTo = null;
+let _evdMonths = null;
 function normDealerCode(v){
   if (v === null || v === undefined) return '';
   let s = String(v).trim();
@@ -6343,6 +6346,33 @@ function evdClaimsForPeriod(period){
   if (period.slice(-5)==='-ACUM'){ const y = period.slice(0,4); return (dlrClaims||[]).filter(function(c){ return (c.month||'').slice(0,4)===y; }); }
   return (dlrClaims||[]).filter(function(c){ return c.month===period; });
 }
+function evdSelectedMonths(){
+  const am = evdAllMonths();
+  if (_evdMonths === null) return am.slice();
+  const sel = _evdMonths.filter(function(m){ return am.indexOf(m)!==-1; }).sort();
+  return sel.length ? sel : am.slice();
+}
+function evdCurrentClaims(){
+  const sel = evdSelectedMonths();
+  const set = {}; sel.forEach(function(m){ set[m]=1; });
+  return (dlrClaims||[]).filter(function(c){ return c.month && set[c.month]; });
+}
+function evdRangeLabel(){
+  const am = evdAllMonths(); const sel = evdSelectedMonths();
+  if (!sel.length) return '—';
+  if (sel.length === am.length) return 'Todos (' + sel.length + ' meses)';
+  if (sel.length === 1) return evdPeriodLabel(sel[0]);
+  return sel.map(function(m){ return evdPeriodLabel(m); }).join(', ');
+}
+function evdToggleMonth(m){
+  const am = evdAllMonths();
+  if (_evdMonths === null) _evdMonths = am.slice();
+  const i = _evdMonths.indexOf(m);
+  if (i === -1) _evdMonths.push(m); else _evdMonths.splice(i,1);
+  if (!_evdMonths.length) _evdMonths = null;
+  renderEvalDlr();
+}
+function evdSelectAllMonths(){ _evdMonths = null; renderEvalDlr(); }
 function setEvdPeriod(v){ _evdPeriod = v; renderEvalDlr(); }
 function toggleEvdDealer(key){ _evdOpen[key] = !_evdOpen[key]; renderEvalDlr(); }
 function toggleEvdKpi(id){ _evdKpiOpen[id] = !_evdKpiOpen[id]; renderEvalDlr(); }
@@ -6389,7 +6419,7 @@ function importDlrClaims(input){
       dlrClaims = dlrClaims.concat(incoming);
       save(STORAGE.dlrClaims, dlrClaims);
       input.value='';
-      _evdPeriod = (mk.length? mk.sort()[mk.length-1].slice(0,4) : String(new Date().getFullYear()))+'-ACUM';
+      _evdFrom = null; _evdTo = null; _evdMonths = null;
       renderEvalDlr();
       let msg = 'Importados '+incoming.length+' reclamos. Meses actualizados: '+(mk.length?mk.sort().join(', '):'(sin fecha)')+'.';
       if (sinFecha) msg += '\n\nOJO: '+sinFecha+' reclamos sin fecha válida quedaron sin mes asignado.';
@@ -6446,7 +6476,7 @@ function evdSegMatch(d, seg){
   return false;
 }
 function evdCalifMapForPeriod(){
-  const claims = evdClaimsForPeriod(_evdPeriod);
+  const claims = evdCurrentClaims();
   const groups = evdAggregate(claims);
   const map = {};
   groups.forEach(function(g){ if (g.dno){ const sc = evdScore(g); map[g.dno] = sc.label==='Bueno'?2:(sc.label==='Mejorable'?1:0); } });
@@ -6474,12 +6504,12 @@ function evdExportResultados(){
     ws['!cols'] = [{wch:40},{wch:10},{wch:11},{wch:12},{wch:11},{wch:11},{wch:14}];
     XLSX.utils.book_append_sheet(wb, ws, seg);
   });
-  const fname = sanitizeFileName('Analisis de desempeño - Garantías - ' + evdPeriodLabel(_evdPeriod)) + '.xlsx';
+  const fname = sanitizeFileName('Analisis de desempeño - Garantías - ' + evdRangeLabel()) + '.xlsx';
   XLSX.writeFile(wb, fname);
 }
 function evdEnviarResultados(){
   evdExportResultados();
-  const mes = evdPeriodLabel(_evdPeriod);
+  const mes = evdRangeLabel();
   const subject = 'Analisis de desempeño - Garantías - ' + _evdSeg + ' - ' + _evdRegion;
   let body = 'Buenos días,\n\n';
   body += 'Adjuntamos el análisis de desempeño de la red sobre el mes de ' + mes + '.\n\n';
@@ -6504,19 +6534,25 @@ function renderEvalDlr(){
   evdNormalizeStore();
   const importBtn = document.getElementById('evd-import-btn');
   if (importBtn) importBtn.style.display = canEditShared() ? '' : 'none';
-  const opts = evdPeriodOptions();
-  if (!_evdPeriod || opts.indexOf(_evdPeriod)===-1){
-    const months = evdAllMonths();
-    _evdPeriod = months.length ? (months[months.length-1].slice(0,4)+'-ACUM') : opts[0];
-  }
+  const months = evdAllMonths();
+  const selSet = {}; evdSelectedMonths().forEach(function(m){ selSet[m]=1; });
   let h = '';
-  h += '<div class="card" style="margin-bottom:16px;padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">';
-  h += '<label style="font-size:12px;color:var(--text-secondary);font-weight:600;">Período:</label>';
-  h += '<select onchange="setEvdPeriod(this.value)" style="font-size:12.5px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;">';
-  opts.forEach(function(p){ h += '<option value="'+p+'" '+(p===_evdPeriod?'selected':'')+'>'+esc(evdPeriodLabel(p))+'</option>'; });
-  h += '</select>';
-  const claims = evdClaimsForPeriod(_evdPeriod);
-  h += '<span style="font-size:11px;color:var(--text-muted);">'+claims.length+' reclamos</span>';
+  h += '<div class="card" style="margin-bottom:16px;padding:12px 14px;">';
+  h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
+  h += '<label style="font-size:12px;color:var(--text-secondary);font-weight:600;">Meses a analizar:</label>';
+  if (!months.length){
+    h += '<span style="font-size:11px;color:var(--text-muted);">sin datos importados</span>';
+  } else {
+    const allSel = (_evdMonths===null);
+    h += '<button onclick="evdSelectAllMonths()" style="cursor:pointer;font-size:11px;font-weight:700;padding:5px 11px;border-radius:14px;border:1px solid '+(allSel?'#16181D':'var(--border)')+';background:'+(allSel?'#16181D':'#fff')+';color:'+(allSel?'#fff':'var(--text-secondary)')+';">Todos</button>';
+    months.forEach(function(m){
+      const on = !!selSet[m];
+      h += '<button onclick="evdToggleMonth(\''+m+'\')" style="cursor:pointer;font-size:11px;font-weight:600;padding:5px 11px;border-radius:14px;border:1px solid '+(on&&!allSel?'#E60012':'var(--border)')+';background:'+(on&&!allSel?'#E60012':'#fff')+';color:'+(on&&!allSel?'#fff':'var(--text-secondary)')+';">'+esc(evdPeriodLabel(m))+'</button>';
+    });
+  }
+  h += '</div>';
+  const claims = evdCurrentClaims();
+  h += '<div style="font-size:11px;color:var(--text-muted);margin-top:9px;">'+claims.length+' reclamos · '+esc(evdRangeLabel())+'</div>';
   h += '</div>';
 
   h += '<div class="card" style="margin-bottom:16px;padding:12px 14px;display:flex;gap:9px;align-items:center;flex-wrap:wrap;">';
@@ -6530,7 +6566,7 @@ function renderEvalDlr(){
 
   if (!claims.length){
     h += '<div class="card" style="text-align:center;padding:30px 16px;color:var(--text-muted);font-size:13px;">';
-    h += 'No hay reclamos para <b>'+esc(evdPeriodLabel(_evdPeriod))+'</b>.';
+    h += 'No hay reclamos para <b>'+esc(evdRangeLabel())+'</b>.';
     if (canEditShared()) h += '<br>Usá <b>"↑ Importar Excel de reclamos"</b> arriba a la derecha. Cada archivo actualiza los meses que contenga.';
     h += '</div>';
     c.innerHTML = h; return;
@@ -6588,8 +6624,9 @@ function renderEvalDlr(){
   groups.sort(function(a,b){ return a._sc.score - b._sc.score || b.total - a.total; });
 
   let prevMap = null, prevLabel = '';
-  if (/^\d{4}-\d{2}$/.test(_evdPeriod)){
-    const am = evdAllMonths(); const idx = am.indexOf(_evdPeriod);
+  const _selM = evdSelectedMonths();
+  if (_selM.length === 1){
+    const am = evdAllMonths(); const idx = am.indexOf(_selM[0]);
     if (idx > 0){ prevMap = evdScoreMapForMonth(am[idx-1]); prevLabel = evdPeriodLabel(am[idx-1]); }
   }
 
