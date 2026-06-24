@@ -2144,7 +2144,7 @@ function scopedKey(k) {
   return k;
 }
 const load = k => { try { return JSON.parse(localStorage.getItem(scopedKey(k)) || '[]'); } catch(e) { return []; } };
-const save = (k, v) => localStorage.setItem(scopedKey(k), JSON.stringify(v));
+const save = (k, v) => { try { localStorage.setItem(scopedKey(k), JSON.stringify(v)); } catch(e) { console.warn('save', k, e); } };
 
 let activities = load(STORAGE.activities);
 let counterLog = load(STORAGE.counter);
@@ -5646,78 +5646,86 @@ function notifyDealerByMail(recallId, code) {
     alert('Este concesionario no tiene email cargado. Cargá uno en su perfil.');
     return;
   }
-  const units = (r.units || []).filter(u => (u.assignedCode || u.dealerCode) === code);
-  const pending = units.filter(u => !u.serviced);
   const dealerName = (dlr ? dlr.n : code);
   const dealerLine = dealerName.toUpperCase() + ' - ' + code;
-  const subject = 'Acompañamiento Recall (' + (r.name || '') + ')';
-  let vig = r.start || '-';
-  if (/^\d{4}-\d{2}-\d{2}/.test(vig)) { const pp = vig.slice(0,10).split('-'); vig = pp[2]+'/'+pp[1]+'/'+pp[0]; }
-  const dn = esc(dealerLine), rn = esc(r.name || ''), rm = esc(r.models || '-'), rv = esc(vig);
-  const RED = '#C00000';
+  const subject = 'Seguimiento Recall (' + (r.name || '') + ') - ' + dealerName;
 
-  // Versión con formato (negritas en encabezados) para pegar en el correo
   let html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#16181D;line-height:1.55;">';
-  html += 'Estimado <b>' + dn + '</b>,<br><br>';
-  html += 'Nos ponemos en contacto con el fin de compartirles información sobre la campaña de recall activa en mención.<br><br>';
-  html += '<b>Detalles</b><br>';
-  html += 'Campaña: ' + rn + '<br>';
-  html += 'Modelo involucrado: ' + rm + '<br>';
-  html += 'Puesta en vigencia: ' + rv + '<br><br>';
-  html += '<b>Archivos adjuntos:</b>';
+  html += 'Buenas tardes, estimados:<br><br>';
+  html += 'Gracias por el compromiso y la predisposición.<br>';
+  html += 'Este mail es el comienzo de un diálogo que llevaremos mes a mes para avanzar con el cumplimiento de la campaña de Recall.<br><br>';
+  html += 'Me gustaría empezar identificando con quién tengo el gusto y con quién llevaré a cabo el seguimiento. La idea es que podamos definir un objetivo de cumplimiento que se relevará mes a mes. Recomiendo que lo analicen contemplando la demanda de trabajo que enfrenta su equipo, para que esta actividad se adapte a sus tiempos y sea un objetivo alcanzable mes a mes.<br><br>';
+  html += '<b>A definir</b>';
   html += '<ul style="margin:6px 0 14px;padding-left:20px;">';
-  html += '<li>Boletín de lanzamiento de la campaña.</li>';
-  html += '<li>Instructivo de realización.</li>';
-  html += '<li>Listado de unidades asignadas a su concesionario.</li>';
-  html += '<li>Acta de intervención de campaña de recall.</li>';
+  html += '<li>Identificar el representante del concesionario que llevará la trazabilidad de la campaña.</li>';
+  html += '<li>Definir el objetivo de cumplimiento mensual (cuántas unidades podrán realizar por mes).</li>';
+  html += '<li>Metodología de trabajo.</li>';
   html += '</ul>';
-  html += '<b>Propuesta</b><br>';
-  html += 'El propósito de esta comunicación es identificar las unidades involucradas que han sido asignadas a su concesionario y proponer un trabajo conjunto para lograr el cumplimiento de la campaña de manera eficiente y sostenida.<br><br>';
-  html += 'Les solicitamos confirmar la recepción de este correo. De esta manera damos inicio a un diálogo para definir un objetivo mensual de cumplimiento que sea alcanzable y se adapte a la realidad operativa de su concesionario.<br><br>';
-  html += '<b>Objetivo</b>';
+  html += 'Si bien en el mail inicial compartí la información general de la campaña a toda la red de Yamaha, este mail es personal entre ustedes y Garantías; la intención es brindarles soporte y acompañamiento hasta que finalicen el 100% de las unidades asignadas. Sobre estas unidades les dejo un adjunto que será nuestra base de trabajo: en el documento van a encontrar todas las unidades asignadas a ustedes que se encuentran alcanzadas por el recall.<br><br>';
+  html += '<b>Propuesta de Metodología</b><br>';
+  html += '<b>Concesionario</b>';
   html += '<ul style="margin:6px 0 14px;padding-left:20px;">';
-  html += '<li>Definir un plan de acción que permita avanzar con el cumplimiento de las campañas activas.</li>';
-  html += '<li>Realizar seguimiento periódico del progreso de la campaña.</li>';
-  html += '<li>Auditar mensualmente el proceso hasta la finalización de la campaña.</li>';
+  html += '<li>Identificar las unidades involucradas.</li>';
+  html += '<li>Proyectar y definir el objetivo de cumplimiento del 100% de las unidades (cuántas por mes se realizarían).</li>';
+  html += '<li>Contactar al usuario y ofrecer turno para realizar el servicio.</li>';
+  html += '<li>Abastecerse de los repuestos necesarios según el objetivo definido (consultar sobre los repuestos a Lucas Rios).</li>';
+  html += '<li>Al finalizar un servicio, debe gestionarse la carga en el portal de garantía para el recupero de Mano de obra + Repuestos.</li>';
+  html += '<li>Actualizar la planilla de seguimiento completando los datos solicitados y adjuntarla en este mismo mail durante la primera semana de cada mes.</li>';
   html += '</ul>';
-  html += '<font color="' + RED + '"><span style="color:' + RED + ';">Aclaro que, hasta tanto no se acuerde el objetivo de cumplimiento y la metodología de trabajo, no realizaremos ninguna medición de desempeño. En esta primera etapa, la prioridad es establecer un esquema de trabajo claro, realista y beneficioso para ambas partes.</span></font><br><br>';
-  html += 'Desde Yamaha estaremos acompañándolos durante todo el proceso.<br><br>';
-  html += 'Agradeceremos su confirmación de recepción para iniciar el diálogo y coordinar los próximos pasos.<br><br>';
-  html += 'Quedamos a disposición ante cualquier consulta.<br><br>';
-  html += 'Saludos cordiales,';
+  html += '<b>Garantías</b>';
+  html += '<ul style="margin:6px 0 14px;padding-left:20px;">';
+  html += '<li>Brindar acompañamiento durante todo el proceso hasta finalizar la campaña.</li>';
+  html += '<li>Daremos seguimiento mes a mes para medir el progreso del cumplimiento de las unidades.</li>';
+  html += '<li>Analizar el desempeño del concesionario y buscar la mejora continua en los procesos involucrados.</li>';
+  html += '<li>Devolución de la planilla de seguimiento con datos actualizados en caso de requerir.</li>';
+  html += '</ul>';
+  html += 'Estimados, esta es nuestra propuesta de trabajo en conjunto para que alcancemos el 100% del cumplimiento de esta campaña como nos demanda casa matriz. Recuerden que esta actividad es una obligación por parte de cada representante de la marca; entendemos el trabajo que esto involucra, por lo que les presentamos esta propuesta para trabajar en conjunto y suplir esta urgencia con eficiencia. Si están de acuerdo con la misma, por favor confírmenme para asentarlo internamente.<br><br>';
+  html += '<b>Adjunto</b>';
+  html += '<ul style="margin:6px 0 14px;padding-left:20px;">';
+  html += '<li>Listado de unidades (Excel).</li>';
+  html += '<li>Instructivo de seguimiento (PDF).</li>';
+  html += '</ul>';
+  html += 'Ante cualquier consulta estoy a disposición; en caso de requerir, mi WhatsApp se encuentra disponible en la firma del mail.<br><br>';
+  html += 'Gracias por su tiempo, aguardo sus comentarios.<br><br>';
+  html += 'Saludos,';
   html += '</div>';
 
-  // Versión texto plano (para el portapapeles, sin formato)
-  let body = 'Estimado ' + dealerLine + ',\n\n';
-  body += 'Nos ponemos en contacto con el fin de compartirles información sobre la campaña de recall activa en mención.\n\n';
-  body += 'Detalles\n';
-  body += 'Campaña: ' + (r.name || '') + '\n';
-  body += 'Modelo involucrado: ' + (r.models || '-') + '\n';
-  body += 'Puesta en vigencia: ' + vig + '\n\n';
-  body += 'Archivos adjuntos:\n';
-  body += '• Boletín de lanzamiento de la campaña.\n';
-  body += '• Instructivo de realización.\n';
-  body += '• Listado de unidades asignadas a su concesionario.\n';
-  body += '• Acta de intervención de campaña de recall.\n\n';
-  body += 'Propuesta\n';
-  body += 'El propósito de esta comunicación es identificar las unidades involucradas que han sido asignadas a su concesionario y proponer un trabajo conjunto para lograr el cumplimiento de la campaña de manera eficiente y sostenida.\n\n';
-  body += 'Les solicitamos confirmar la recepción de este correo. De esta manera damos inicio a un diálogo para definir un objetivo mensual de cumplimiento que sea alcanzable y se adapte a la realidad operativa de su concesionario.\n\n';
-  body += 'Objetivo\n';
-  body += '• Definir un plan de acción que permita avanzar con el cumplimiento de las campañas activas.\n';
-  body += '• Realizar seguimiento periódico del progreso de la campaña.\n';
-  body += '• Auditar mensualmente el proceso hasta la finalización de la campaña.\n\n';
-  body += 'Aclaro que, hasta tanto no se acuerde el objetivo de cumplimiento y la metodología de trabajo, no realizaremos ninguna medición de desempeño. En esta primera etapa, la prioridad es establecer un esquema de trabajo claro, realista y beneficioso para ambas partes.\n\n';
-  body += 'Desde Yamaha estaremos acompañándolos durante todo el proceso.\n\n';
-  body += 'Agradeceremos su confirmación de recepción para iniciar el diálogo y coordinar los próximos pasos.\n\n';
-  body += 'Quedamos a disposición ante cualquier consulta.\n\n';
-  body += 'Saludos cordiales,' 
+  let body = 'Buenas tardes, estimados:\n\n';
+  body += 'Gracias por el compromiso y la predisposición.\n';
+  body += 'Este mail es el comienzo de un diálogo que llevaremos mes a mes para avanzar con el cumplimiento de la campaña de Recall.\n\n';
+  body += 'Me gustaría empezar identificando con quién tengo el gusto y con quién llevaré a cabo el seguimiento. La idea es que podamos definir un objetivo de cumplimiento que se relevará mes a mes. Recomiendo que lo analicen contemplando la demanda de trabajo que enfrenta su equipo, para que esta actividad se adapte a sus tiempos y sea alcanzable mes a mes.\n\n';
+  body += 'A definir\n';
+  body += '• Identificar el representante del concesionario que llevará la trazabilidad de la campaña.\n';
+  body += '• Definir el objetivo de cumplimiento mensual (cuántas unidades podrán realizar por mes).\n';
+  body += '• Metodología de trabajo.\n\n';
+  body += 'Si bien en el mail inicial compartí la información general de la campaña a toda la red de Yamaha, este mail es personal entre ustedes y Garantías; la intención es brindarles soporte y acompañamiento hasta que finalicen el 100% de las unidades asignadas. Sobre estas unidades les dejo un adjunto que será nuestra base de trabajo: van a encontrar todas las unidades asignadas a ustedes alcanzadas por el recall.\n\n';
+  body += 'Propuesta de Metodología\n';
+  body += 'Concesionario\n';
+  body += '• Identificar las unidades involucradas.\n';
+  body += '• Proyectar y definir el objetivo de cumplimiento del 100% de las unidades (cuántas por mes se realizarían).\n';
+  body += '• Contactar al usuario y ofrecer turno para realizar el servicio.\n';
+  body += '• Abastecerse de los repuestos necesarios según el objetivo definido (consultar sobre los repuestos a Lucas Rios).\n';
+  body += '• Al finalizar un servicio, gestionar la carga en el portal de garantía para el recupero de Mano de obra + Repuestos.\n';
+  body += '• Actualizar la planilla de seguimiento y adjuntarla en este mismo mail durante la primera semana de cada mes.\n\n';
+  body += 'Garantías\n';
+  body += '• Brindar acompañamiento durante todo el proceso hasta finalizar la campaña.\n';
+  body += '• Seguimiento mes a mes para medir el progreso del cumplimiento de las unidades.\n';
+  body += '• Analizar el desempeño del concesionario y buscar la mejora continua en los procesos involucrados.\n';
+  body += '• Devolución de la planilla de seguimiento con datos actualizados en caso de requerir.\n\n';
+  body += 'Estimados, esta es nuestra propuesta de trabajo en conjunto para alcanzar el 100% del cumplimiento de esta campaña como nos demanda casa matriz. Recuerden que esta actividad es una obligación de cada representante de la marca. Si están de acuerdo, por favor confírmenme para asentarlo internamente.\n\n';
+  body += 'Adjunto\n';
+  body += '• Listado de unidades (Excel).\n';
+  body += '• Instructivo de seguimiento (PDF).\n\n';
+  body += 'Ante cualquier consulta estoy a disposición; mi WhatsApp se encuentra en la firma del mail.\n\n';
+  body += 'Gracias por su tiempo, aguardo sus comentarios.\n\nSaludos,';
 
   const firstEmail = p.dlr_email.split(/[;,]/)[0].trim();
-  const mailto = 'mailto:' + encodeURIComponent(firstEmail) + '?subject=' + encodeURIComponent(subject); // cuerpo vacío: el texto va por portapapeles
+  const mailto = 'mailto:' + encodeURIComponent(firstEmail) + '?subject=' + encodeURIComponent(subject);
   function _finishNotify(copied){
+    try { exportRecallDealerUnits(recallId, code); } catch(e){}
     alert(copied
-      ? 'Copiamos el correo con formato (negritas y rojo) al portapapeles. Se abre el mail con el destinatario y el asunto: pegá con Ctrl+V (o Cmd+V) en el cuerpo.'
-      : 'Se abrió el correo con el destinatario y el asunto. (Tu navegador no permitió copiar el texto con formato; copialo desde el detalle de la campaña.)');
+      ? 'Copiamos el correo al portapapeles y descargamos el Excel de unidades de este concesionario. En el mail que se abre, pegá con Ctrl+V (o Cmd+V) y adjuntá el Excel descargado (y el instructivo PDF).'
+      : 'Se abrió el correo y se descargó el Excel de unidades. (Tu navegador no permitió copiar el texto con formato.)');
     window.location.href = mailto;
     if (!(r.notifications||{})[code]) { setRecallNotification(recallId, code, new Date().toISOString().slice(0,10)); }
   }
@@ -5727,6 +5735,64 @@ function notifyDealerByMail(recallId, code) {
       navigator.clipboard.write([item]).then(function(){ _finishNotify(true); }, function(){ _finishNotify(false); });
     } else { _finishNotify(false); }
   } catch(e){ _finishNotify(false); }
+}
+
+function recallNetworkComm(recallId) {
+  if (!requireSharedEdit()) return;
+  const r = recalls.find(x => x.id === recallId);
+  if (!r) return;
+  const codes = {};
+  (r.units || []).forEach(u => { const cc = u.assignedCode || u.dealerCode; if (cc) codes[cc] = 1; });
+  const emails = [];
+  Object.keys(codes).forEach(cc => { const pp = dealerProfiles[cc] || {}; if (pp.dlr_email) pp.dlr_email.split(/[;,]/).forEach(e => { e = e.trim(); if (e && emails.indexOf(e) === -1) emails.push(e); }); });
+  if (!emails.length) { alert('Ningún concesionario asignado a esta campaña tiene email cargado.'); return; }
+  let vig = r.start || '-';
+  if (/^\d{4}-\d{2}-\d{2}/.test(vig)) { const ps = vig.slice(0,10).split('-'); vig = ps[2]+'/'+ps[1]+'/'+ps[0]; }
+  const rn = esc(r.name || ''), rm = esc(r.models || '-'), rv = esc(vig);
+  const RED = '#C00000';
+  const subject = 'Acompañamiento Recall (' + (r.name || '') + ')';
+
+  let html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#16181D;line-height:1.55;">';
+  html += 'Estimados,<br><br>';
+  html += 'Nos ponemos en contacto con el fin de compartirles información sobre la campaña de recall activa en mención.<br><br>';
+  html += '<b>Detalles</b><br>Campaña: ' + rn + '<br>Modelo involucrado: ' + rm + '<br>Puesta en vigencia: ' + rv + '<br><br>';
+  html += '<b>Archivos adjuntos:</b>';
+  html += '<ul style="margin:6px 0 14px;padding-left:20px;"><li>Boletín de lanzamiento de la campaña.</li><li>Instructivo de realización.</li><li>Listado de unidades asignadas a su concesionario.</li><li>Acta de intervención de campaña de recall.</li></ul>';
+  html += '<b>Propuesta</b><br>El propósito de esta comunicación es identificar las unidades involucradas que han sido asignadas a su concesionario y proponer un trabajo conjunto para lograr el cumplimiento de la campaña de manera eficiente y sostenida.<br><br>';
+  html += 'Les solicitamos confirmar la recepción de este correo. De esta manera damos inicio a un diálogo para definir un objetivo mensual de cumplimiento que sea alcanzable y se adapte a la realidad operativa de su concesionario.<br><br>';
+  html += '<b>Objetivo</b>';
+  html += '<ul style="margin:6px 0 14px;padding-left:20px;"><li>Definir un plan de acción que permita avanzar con el cumplimiento de las campañas activas.</li><li>Realizar seguimiento periódico del progreso de la campaña.</li><li>Auditar mensualmente el proceso hasta la finalización de la campaña.</li></ul>';
+  html += '<font color="' + RED + '"><span style="color:' + RED + ';">Aclaro que, hasta tanto no se acuerde el objetivo de cumplimiento y la metodología de trabajo, no realizaremos ninguna medición de desempeño. En esta primera etapa, la prioridad es establecer un esquema de trabajo claro, realista y beneficioso para ambas partes.</span></font><br><br>';
+  html += 'Desde Yamaha estaremos acompañándolos durante todo el proceso.<br><br>';
+  html += 'Agradeceremos su confirmación de recepción para iniciar el diálogo y coordinar los próximos pasos.<br><br>';
+  html += 'Quedamos a disposición ante cualquier consulta.<br><br>Saludos cordiales,';
+  html += '</div>';
+
+  let body = 'Estimados,\n\n';
+  body += 'Nos ponemos en contacto con el fin de compartirles información sobre la campaña de recall activa en mención.\n\n';
+  body += 'Detalles\nCampaña: ' + (r.name || '') + '\nModelo involucrado: ' + (r.models || '-') + '\nPuesta en vigencia: ' + vig + '\n\n';
+  body += 'Archivos adjuntos:\n• Boletín de lanzamiento de la campaña.\n• Instructivo de realización.\n• Listado de unidades asignadas a su concesionario.\n• Acta de intervención de campaña de recall.\n\n';
+  body += 'Propuesta\nEl propósito de esta comunicación es identificar las unidades involucradas que han sido asignadas a su concesionario y proponer un trabajo conjunto para lograr el cumplimiento de la campaña de manera eficiente y sostenida.\n\n';
+  body += 'Les solicitamos confirmar la recepción de este correo. De esta manera damos inicio a un diálogo para definir un objetivo mensual de cumplimiento que sea alcanzable y se adapte a la realidad operativa de su concesionario.\n\n';
+  body += 'Objetivo\n• Definir un plan de acción que permita avanzar con el cumplimiento de las campañas activas.\n• Realizar seguimiento periódico del progreso de la campaña.\n• Auditar mensualmente el proceso hasta la finalización de la campaña.\n\n';
+  body += 'Aclaro que, hasta tanto no se acuerde el objetivo de cumplimiento y la metodología de trabajo, no realizaremos ninguna medición de desempeño. En esta primera etapa, la prioridad es establecer un esquema de trabajo claro, realista y beneficioso para ambas partes.\n\n';
+  body += 'Desde Yamaha estaremos acompañándolos durante todo el proceso.\n\n';
+  body += 'Agradeceremos su confirmación de recepción para iniciar el diálogo y coordinar los próximos pasos.\n\n';
+  body += 'Quedamos a disposición ante cualquier consulta.\n\nSaludos cordiales,';
+
+  const mailto = 'mailto:?bcc=' + encodeURIComponent(emails.join(';')) + '&subject=' + encodeURIComponent(subject);
+  function _finishComm(copied){
+    alert(copied
+      ? ('Copiamos el comunicado con formato al portapapeles. Se abre el mail con ' + emails.length + ' concesionarios en CCO (copia oculta): pegá con Ctrl+V (o Cmd+V) en el cuerpo.')
+      : ('Se abrió el mail con ' + emails.length + ' concesionarios en CCO. (Tu navegador no permitió copiar el texto con formato.)'));
+    window.location.href = mailto;
+  }
+  try {
+    if (navigator.clipboard && window.ClipboardItem) {
+      const item = new ClipboardItem({ 'text/html': new Blob([html], {type:'text/html'}), 'text/plain': new Blob([body], {type:'text/plain'}) });
+      navigator.clipboard.write([item]).then(function(){ _finishComm(true); }, function(){ _finishComm(false); });
+    } else { _finishComm(false); }
+  } catch(e){ _finishComm(false); }
 }
 
 
@@ -6101,7 +6167,7 @@ function openRecallDetail(id) {
   c.style.display = 'none';
   det.style.display = 'block';
   const sb = r.status === 'Cerrada' ? 'bdg-done' : r.status === 'En seguimiento' ? 'bdg-prog' : 'bdg-pend';
-  let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><button class="btn btn-ghost btn-sm" onclick="renderRecalls()">← Volver a campañas</button><button class="btn btn-ghost btn-sm" onclick="exportRecallAllDealers(\''+r.id+'\')">↓ Exportar XLS (todos)</button></div>';
+  let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;"><button class="btn btn-ghost btn-sm" onclick="renderRecalls()">← Volver a campañas</button><div style="display:flex;gap:6px;flex-wrap:wrap;">'+(canEditShared()?'<button class="btn btn-ghost btn-sm" onclick="recallNetworkComm(\''+r.id+'\')" title="Comunicado general a todos los concesionarios de la campaña (CCO)">✉ Comunicado a la red</button>':'')+'<button class="btn btn-ghost btn-sm" onclick="exportRecallAllDealers(\''+r.id+'\')">↓ Exportar XLS (todos)</button></div></div>';
   html += '<div class="card" style="margin-bottom:16px;"><div style="display:flex;justify-content:space-between;align-items:flex-start;"><div><div style="font-size:20px;font-weight:700;">'+esc(r.name)+'</div><div style="font-size:13px;color:var(--text-secondary);margin-top:4px;">'+(r.models?'Modelos: '+esc(r.models)+' · ':'')+(r.start?'Desde '+r.start:'')+'</div></div><span class="bdg '+sb+'" style="font-size:13px;padding:5px 12px;">'+esc(r.status)+'</span></div></div>';
   html += '<div class="kpi-grid" style="margin-bottom:16px;">';
   html += '<div class="kpi"><div class="kpi-icon">📋</div><div class="kpi-label">Unidades afectadas</div><div class="kpi-value">'+s.total+'</div></div>';
@@ -10536,8 +10602,19 @@ if (!window.__YNET_CLOUD) { initApp(); }
   const _origRemove = localStorage.removeItem.bind(localStorage);
   const SESSION_KEYS = ['gg_current_user_ze','gg_current_role','gg_remember_ze'];
   function isSharedKey(k){ return k && k.indexOf('gg_') === 0 && SESSION_KEYS.indexOf(k) === -1; }
-  // Interceptar escrituras de la app para subirlas a la nube
-  localStorage.setItem = function(k, v){ _origSet(k, v); if (isSharedKey(k)) cloudUpsert(k, v); };
+  let _quotaWarned = false;
+  function _estLocalKB(){ let n=0; try { for (let i=0;i<localStorage.length;i++){ const kk=localStorage.key(i); const vv=localStorage.getItem(kk)||''; n += (kk?kk.length:0) + vv.length; } } catch(e){} return Math.round(n/1024); }
+  function _ynetQuotaHit(){
+    if (_quotaWarned) return; _quotaWarned = true;
+    setTimeout(function(){ try { alert('El almacenamiento local del navegador está lleno (~' + _estLocalKB() + ' KB).\n\nTus cambios igual se guardan en la nube y siguen visibles en esta sesión, pero conviene liberar espacio para que persistan al recargar. Conviene mover los datos pesados (recalls, imágenes) a almacenamiento externo.'); } catch(e){} }, 150);
+  }
+  // Interceptar escrituras de la app para subirlas a la nube (resiliente a cuota llena)
+  localStorage.setItem = function(k, v){
+    let ok = true;
+    try { _origSet(k, v); } catch(e){ ok = false; _ynetQuotaHit(); }
+    if (isSharedKey(k)) cloudUpsert(k, v); // se sube a la nube aunque el guardado local haya fallado
+    return ok;
+  };
   localStorage.removeItem = function(k){ _origRemove(k); if (isSharedKey(k)) cloudDelete(k); };
   let _q = Promise.resolve();
   const _pending = new Map(); // claves con escritura aún no confirmada en la nube
@@ -10597,7 +10674,7 @@ if (!window.__YNET_CLOUD) { initApp(); }
       const localTs = _meta[row.k];
       if (!localTs || _tsMs(row.updated_at) >= _tsMs(localTs)) {
         // La nube es más nueva (o no hay marca local): aplicar nube
-        _origSet(row.k, row.v);
+        try { _origSet(row.k, row.v); } catch(e){ /* local lleno: la app usa memoria/nube en esta sesión */ }
         _meta[row.k] = row.updated_at || localTs || new Date().toISOString();
       } else {
         // Lo local es más nuevo y no se había subido: conservar local y re-subir
