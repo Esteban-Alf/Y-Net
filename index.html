@@ -1759,6 +1759,7 @@ function reloadRoleScopedState() {
   cleanupSeededInbox();
   // Cuantificador y tipos de actividad: por usuario
   try { const s = JSON.parse(localStorage.getItem(scopedKey('gg_cnt_types_v1'))||'null'); CNT_TYPES = (s&&Array.isArray(s)&&s.length>0)?s:JSON.parse(JSON.stringify(DEFAULT_CNT_TYPES)); } catch(e){ CNT_TYPES = JSON.parse(JSON.stringify(DEFAULT_CNT_TYPES)); }
+  try { if (Array.isArray(CNT_TYPES) && !CNT_TYPES.some(function(x){ return /statement/i.test((x.id||'')+' '+(x.label||'')); })) { CNT_TYPES.push({id:'STATEMENT', label:'Statement', avgMin:25}); saveCntTypes(); } } catch(e){}
   try { const s = JSON.parse(localStorage.getItem(scopedKey('gg_act_types_v1'))||'null'); actTypes = (s&&Array.isArray(s)&&s.length>0)?s:[...DEFAULT_ACT_TYPES]; } catch(e){ actTypes = [...DEFAULT_ACT_TYPES]; }
 }
 
@@ -2328,6 +2329,7 @@ const DEFAULT_CNT_TYPES = [
   {id:'RECLAMO_ARG', label:'Reclamo ARG', avgMin:20},
   {id:'RECLAMO_UY', label:'Reclamo UY', avgMin:20},
   {id:'FACTURA', label:'Factura', avgMin:15},
+  {id:'STATEMENT', label:'Statement', avgMin:25},
   {id:'SOPORTE_GARANTIA', label:'Soporte Gtía.', avgMin:20},
   {id:'ACTIVIDAD', label:'Actividad', avgMin:30}
 ];
@@ -2948,8 +2950,6 @@ function renderPanel() {
   h += renderPanelKpis();
   // Gráficos
   h += renderPanelCharts();
-  // Actividades del Dashboard, mes a mes
-  h += renderPanelActivitiesByMonth();
   // Filtros
   h += renderPanelFilters();
 
@@ -2967,22 +2967,53 @@ function renderPanel() {
   c.innerHTML = h;
 }
 
+let _panelMonth = null;
+function panelMonthKey(){ if(!_panelMonth) _panelMonth = new Date().toISOString().slice(0,7); return _panelMonth; }
+function panelPrevMonthKey(){ const d=new Date(panelMonthKey()+'-01T00:00:00'); d.setMonth(d.getMonth()-1); return d.toISOString().slice(0,7); }
+function panelShiftMonth(delta){ const d=new Date(panelMonthKey()+'-01T00:00:00'); d.setMonth(d.getMonth()+delta); const k=d.toISOString().slice(0,7); if(k>new Date().toISOString().slice(0,7)) return; _panelMonth=k; renderPanel(); }
+function panelMonthLabel(m){ const d=new Date(m+'-01T00:00:00'); const l=d.toLocaleDateString('es-AR',{month:'long',year:'numeric'}); return l.charAt(0).toUpperCase()+l.slice(1); }
+function cntMonthCount(typeId,m){ if(!typeId) return 0; return (counterLog||[]).filter(function(e){return e.type===typeId && (e.ts||'').slice(0,7)===m;}).length; }
+function cntTypeIdMatch(rx){ const t=(CNT_TYPES||[]).find(function(x){return rx.test(((x.id||'')+' '+(x.label||'')));}); return t?t.id:null; }
+function panelTrainingsMonth(m){ return (trainings||[]).filter(function(t){return (t.date||'').slice(0,7)===m;}).length; }
+function panelVisitsMonth(m){ return (tripVisits||[]).filter(function(v){return (v.date||'').slice(0,7)===m;}).length; }
+function panelTotalLoad(m){ let n=(counterLog||[]).filter(function(e){return (e.ts||'').slice(0,7)===m;}).length; return n + panelTrainingsMonth(m) + panelVisitsMonth(m); }
+function panelDeltaHtml(cur,prv){ let dir,txt; if(prv===0){ dir=cur>0?1:0; txt=cur>0?'nuevo':'='; } else { const pct=Math.round((cur-prv)/prv*100); dir=pct>0?1:(pct<0?-1:0); txt=(pct>0?'+':'')+pct+'%'; } const col=dir>0?'#047857':(dir<0?'#E4002B':'#9AA0A8'); const arr=dir>0?'\u25B2':(dir<0?'\u25BC':'\u25AC'); return '<span style="font-size:10.5px;font-weight:700;color:'+col+';">'+arr+' '+txt+'</span>'; }
+function svgDonut(data,size,thick){ const r=(size-thick)/2, cx=size/2, cy=size/2, C=2*Math.PI*r; const total=data.reduce(function(a,d){return a+d.val;},0); let off=0, segs=''; if(total<=0){ segs='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="#ECEEF1" stroke-width="'+thick+'"/>'; } else data.forEach(function(d){ if(d.val<=0) return; const len=(d.val/total)*C; segs+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+d.color+'" stroke-width="'+thick+'" stroke-dasharray="'+len.toFixed(2)+' '+(C-len).toFixed(2)+'" stroke-dashoffset="'+(-off).toFixed(2)+'" transform="rotate(-90 '+cx+' '+cy+')"/>'; off+=len; }); return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'+segs+'</svg>'; }
+function svgVBars(data,w,h,defColor){ const max=Math.max.apply(null,data.map(function(d){return d.val;}).concat([1])); const n=data.length||1, gap=Math.max(3,w*0.015), bw=(w-gap*(n-1))/n; let s=''; data.forEach(function(d,i){ const bh=Math.max(2,(d.val/max)*(h-30)); const x=i*(bw+gap); const y=h-22-bh; const col=d.color||defColor||'#E4002B'; s+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+bh.toFixed(1)+'" rx="3" fill="'+col+'"/>'; if(d.val) s+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(y-4).toFixed(1)+'" font-size="11" fill="#374151" text-anchor="middle" font-weight="700">'+d.val+'</text>'; s+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(h-6)+'" font-size="10" fill="#9AA0A8" text-anchor="middle">'+esc(d.label)+'</text>'; }); return '<svg width="100%" height="'+h+'" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="xMidYMid meet" style="display:block;">'+s+'</svg>'; }
+function panelKpiCard(icon,label,color,cur,prv,hint){ let h='<div style="position:relative;border:1px solid var(--border);border-radius:12px;padding:13px 14px 12px;background:#fff;overflow:hidden;">'; h+='<div style="position:absolute;top:0;left:0;width:100%;height:3px;background:'+color+';"></div>'; h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'; h+='<span style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;background:'+color+'22;font-size:15px;">'+icon+'</span>'; h+='<span style="font-size:11.5px;color:var(--text-secondary);font-weight:600;line-height:1.15;">'+esc(label)+'</span></div>'; h+='<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:6px;">'; h+='<span style="font-size:27px;font-weight:800;line-height:1;">'+cur+'</span>'; h+=(hint?'<span style="font-size:9.5px;color:var(--text-muted);text-align:right;max-width:90px;">'+esc(hint)+'</span>':panelDeltaHtml(cur,prv)); h+='</div></div>'; return h; }
 function renderPanelKpis() {
-  const all = myVisibleTasks();
-  const total = all.length;
-  const pend = all.filter(t => t.status === 'Pendiente').length;
-  const curso = all.filter(t => t.status === 'En curso').length;
-  const done = all.filter(t => t.status === 'Completado').length;
-  const urg = all.filter(t => t.status !== 'Completado' && t.priority === 'Urgente').length;
-  let h = '<div class="card" style="margin-bottom:16px;">';
-  h += '<div class="card-h"><div class="card-title">📊 KPIs del mes</div></div>';
-  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
-  h += monthlyKpiBox('Total tareas', total, '#374151');
-  h += monthlyKpiBox('Pendientes', pend, '#6B7280');
-  h += monthlyKpiBox('En curso', curso, '#6D28D9');
-  h += monthlyKpiBox('Completadas', done, '#047857');
-  h += monthlyKpiBox('Urgentes abiertas', urg, '#E60012');
-  h += '</div></div>';
+  const m = panelMonthKey(), pm = panelPrevMonthKey();
+  const now = new Date().toISOString().slice(0,7);
+  const stId = cntTypeIdMatch(/statement/i);
+  const totalLoad = panelTotalLoad(m);
+  const series=[]; { const d=new Date(m+'-01T00:00:00'); for(let i=5;i>=0;i--){ const dd=new Date(d); dd.setMonth(dd.getMonth()-i); const mk=dd.toISOString().slice(0,7); series.push({label:panelMonthLabel(mk).slice(0,3), val:panelTotalLoad(mk)}); } }
+  let s3=0,c3=0; { const d=new Date(m+'-01T00:00:00'); for(let i=1;i<=3;i++){ const dd=new Date(d); dd.setMonth(dd.getMonth()-i); s3+=panelTotalLoad(dd.toISOString().slice(0,7)); c3++; } }
+  const avg3=c3?Math.round(s3/c3):0; const vsAvg=avg3>0?Math.round((totalLoad-avg3)/avg3*100):0;
+  let h='';
+  h+='<div class="card" style="margin-bottom:16px;background:linear-gradient(135deg,#16181D 0%,#27313C 100%);color:#fff;border:none;">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">';
+  h+='<div><div style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:#9AA9B8;font-weight:700;">Mis KPIs del mes</div><div style="font-size:22px;font-weight:800;margin-top:2px;">'+esc(panelMonthLabel(m))+'</div></div>';
+  h+='<div style="display:flex;align-items:center;gap:6px;"><button onclick="panelShiftMonth(-1)" style="cursor:pointer;background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:7px;padding:6px 11px;font-size:13px;">\u25C0</button><button onclick="panelShiftMonth(1)" style="cursor:'+(m>=now?'default':'pointer')+';background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:7px;padding:6px 11px;font-size:13px;'+(m>=now?'opacity:.35;':'')+'">\u25B6</button></div></div>';
+  h+='<div style="display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap;margin-top:14px;">';
+  h+='<div><div style="font-size:46px;font-weight:800;line-height:1;">'+totalLoad+'</div><div style="font-size:11.5px;color:#9AA9B8;margin-top:3px;">registros de actividad este mes</div></div>';
+  h+='<div style="flex:1;min-width:210px;max-width:430px;">';
+  { const mx=Math.max.apply(null,series.map(function(s){return s.val;}).concat([1])); let bars=''; series.forEach(function(s,i){ const bh=Math.max(3,(s.val/mx)*46); const last=i===series.length-1; bars+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;"><div style="font-size:9px;color:#8A95A2;">'+s.val+'</div><div style="width:72%;height:'+bh+'px;border-radius:3px 3px 0 0;background:'+(last?'#E4002B':'rgba(255,255,255,.30)')+';"></div><div style="font-size:8.5px;color:#8A95A2;">'+esc(s.label)+'</div></div>'; }); h+='<div style="display:flex;align-items:flex-end;gap:5px;height:76px;">'+bars+'</div>'; }
+  h+='</div>';
+  const vcol=vsAvg>0?'#34D399':(vsAvg<0?'#FCA5A5':'#9AA9B8');
+  h+='<div style="text-align:right;min-width:118px;"><div style="font-size:10.5px;color:#9AA9B8;">vs. promedio 3 meses</div><div style="font-size:23px;font-weight:800;color:'+vcol+';">'+(vsAvg>0?'+':'')+vsAvg+'%</div>'+(vsAvg>=15?'<div style="font-size:10.5px;color:#FCA5A5;font-weight:700;">Mes intenso</div>':'')+'</div>';
+  h+='</div></div>';
+  const varM=[['\uD83D\uDCF1','WhatsApp','#25D366','WHATSAPP'],['\uD83D\uDCDE','Llamadas','#1E40AF','LLAMADA'],['\u2709\uFE0F','Mails','#D97706','MAIL'],['\uD83C\uDF10','Consultas Suite Web','#0891B2','SUITE_WEB'],['\uD83D\uDEE0\uFE0F','Soporte','#7C3AED','SOPORTE_GARANTIA'],['\uD83D\uDCCB','Reclamos ARG','#E4002B','RECLAMO_ARG'],['\uD83D\uDCCB','Reclamos UY','#0EA5E9','RECLAMO_UY'],['\uD83E\uDDFE','Facturas procesadas','#059669','FACTURA']];
+  h+='<div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin:4px 2px 9px;">Actividades variables</div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;">';
+  varM.forEach(function(k){ h+=panelKpiCard(k[0],k[1],k[2],cntMonthCount(k[3],m),cntMonthCount(k[3],pm)); });
+  h+=panelKpiCard('\uD83C\uDF93','Capacitaciones','#DB2777',panelTrainingsMonth(m),panelTrainingsMonth(pm));
+  h+=panelKpiCard('\uD83E\uDDED','Visitas','#CA8A04',panelVisitsMonth(m),panelVisitsMonth(pm));
+  h+=panelKpiCard('\uD83D\uDCCA','Encuestas','#6B7280',0,0,'m\u00f3dulo a definir');
+  h+='</div>';
+  h+='<div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin:15px 2px 9px;">Actividades fijas</div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:16px;">';
+  h+=panelKpiCard('\uD83D\uDCC4','Statement','#16181D',stId?cntMonthCount(stId,m):0,stId?cntMonthCount(stId,pm):0,stId?null:'cre\u00e1 el tipo en el cuantificador');
+  h+='</div>';
   return h;
 }
 
@@ -3013,34 +3044,34 @@ function renderPanelFilters() {
 }
 
 function renderPanelCharts() {
-  const all = myVisibleTasks();
-  if (all.length === 0) return '';
-  const total = all.length;
-  const byStatus = { 'Pendiente':0, 'En curso':0, 'Completado':0 };
-  all.forEach(t => { if (byStatus[t.status] != null) byStatus[t.status]++; });
-  const segs = [
-    { label:'Completado', val:byStatus['Completado'], color:'#047857' },
-    { label:'En curso',   val:byStatus['En curso'],   color:'#6D28D9' },
-    { label:'Pendiente',  val:byStatus['Pendiente'],  color:'#9CA3AF' }
-  ];
-  const R=52, C=2*Math.PI*R; let off=0, arcs='';
-  segs.forEach(s => { if (!s.val) return; const len=s.val/total*C; arcs += '<circle cx="70" cy="70" r="'+R+'" fill="none" stroke="'+s.color+'" stroke-width="19" stroke-dasharray="'+len.toFixed(2)+' '+(C-len).toFixed(2)+'" stroke-dashoffset="'+(-off).toFixed(2)+'" transform="rotate(-90 70 70)"/>'; off += len; });
-  const donePct = Math.round(byStatus['Completado']/total*100);
-  const donut = '<svg viewBox="0 0 140 140" width="124" height="124"><circle cx="70" cy="70" r="52" fill="none" stroke="#EEF0F3" stroke-width="19"/>'+arcs+'<text x="70" y="66" text-anchor="middle" font-size="26" font-weight="700" fill="#16181D">'+donePct+'%</text><text x="70" y="86" text-anchor="middle" font-size="10" fill="#6A7180">completado</text></svg>';
-  const legend = segs.map(s => '<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-bottom:6px;"><span style="width:11px;height:11px;border-radius:3px;background:'+s.color+';"></span>'+s.label+'<b style="margin-left:auto;">'+s.val+'</b></div>').join('');
-
-  const byPrio = { 'Urgente':0,'Alta':0,'Normal':0,'Baja':0 };
-  all.forEach(t => { if (byPrio[t.priority] != null) byPrio[t.priority]++; });
-  const maxP = Math.max(1, byPrio['Urgente'], byPrio['Alta'], byPrio['Normal'], byPrio['Baja']);
-  const prColors = { 'Urgente':'#E60012','Alta':'#EA580C','Normal':'#1E40AF','Baja':'#6B7280' };
-  const bars = Object.keys(byPrio).map(p => '<div style="margin-bottom:9px;"><div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px;"><span>'+p+'</span><b>'+byPrio[p]+'</b></div><div style="height:8px;background:#EEF0F3;border-radius:6px;overflow:hidden;"><div style="height:100%;width:'+Math.round(byPrio[p]/maxP*100)+'%;background:'+prColors[p]+';border-radius:6px;transition:width .3s;"></div></div></div>').join('');
-
-  let h = '<div class="card" style="margin-bottom:16px;">';
-  h += '<div class="card-h"><div class="card-title">📈 Resumen visual</div></div>';
-  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;align-items:center;">';
-  h += '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:center;">'+donut+'<div style="flex:1;min-width:130px;">'+legend+'</div></div>';
-  h += '<div><div style="font-size:11.5px;color:var(--text-muted);font-weight:600;margin-bottom:8px;">Por prioridad</div>'+bars+'</div>';
-  h += '</div></div>';
+  const m = panelMonthKey();
+  const channels=[{label:'WhatsApp',color:'#25D366',val:cntMonthCount('WHATSAPP',m)},{label:'Llamadas',color:'#1E40AF',val:cntMonthCount('LLAMADA',m)},{label:'Mails',color:'#D97706',val:cntMonthCount('MAIL',m)},{label:'Suite Web',color:'#0891B2',val:cntMonthCount('SUITE_WEB',m)},{label:'Soporte',color:'#7C3AED',val:cntMonthCount('SOPORTE_GARANTIA',m)}];
+  const chTotal=channels.reduce(function(a,c){return a+c.val;},0);
+  const series=[]; { const d=new Date(m+'-01T00:00:00'); for(let i=5;i>=0;i--){ const dd=new Date(d); dd.setMonth(dd.getMonth()-i); const mk=dd.toISOString().slice(0,7); series.push({label:panelMonthLabel(mk).slice(0,3), val:panelTotalLoad(mk), color:(mk===m?'#E4002B':'#C9CDD3')}); } }
+  const daysIn=new Date(parseInt(m.slice(0,4)),parseInt(m.slice(5,7)),0).getDate();
+  const daily=[]; for(let dn=1;dn<=daysIn;dn++){ const ds=m+'-'+String(dn).padStart(2,'0'); const cnt=(counterLog||[]).filter(function(e){return (e.ts||'').slice(0,10)===ds;}).length; daily.push({label:String(dn), val:cnt, color:'#16181D'}); }
+  const rArg=cntMonthCount('RECLAMO_ARG',m), rUy=cntMonthCount('RECLAMO_UY',m), rT=rArg+rUy;
+  let h='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-bottom:16px;">';
+  h+='<div class="card"><div class="card-h"><div class="card-title">\uD83D\uDCDE \u00bfEn qu\u00e9 se va el d\u00eda?</div></div>';
+  h+='<div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;">Distribuci\u00f3n de interacciones por canal este mes.</div>';
+  h+='<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">';
+  h+='<div style="position:relative;width:130px;height:130px;flex-shrink:0;">'+svgDonut(channels,130,22)+'<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;"><span style="font-size:26px;font-weight:800;">'+chTotal+'</span><span style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;">contactos</span></div></div>';
+  h+='<div style="flex:1;min-width:140px;">';
+  channels.forEach(function(c){ const pct=chTotal?Math.round(c.val/chTotal*100):0; h+='<div style="display:flex;align-items:center;gap:7px;margin-bottom:7px;"><span style="width:11px;height:11px;border-radius:3px;background:'+c.color+';flex-shrink:0;"></span><span style="font-size:12px;flex:1;">'+esc(c.label)+'</span><span style="font-size:12px;font-weight:700;">'+c.val+'</span><span style="font-size:10.5px;color:var(--text-muted);width:36px;text-align:right;">'+pct+'%</span></div>'; });
+  h+='</div></div></div>';
+  h+='<div class="card"><div class="card-h"><div class="card-title">\uD83D\uDCC8 Carga por mes</div></div>';
+  h+='<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Volumen total de actividad en los \u00faltimos 6 meses.</div>';
+  h+=svgVBars(series,600,170,'#C9CDD3');
+  h+='</div></div>';
+  h+='<div class="card" style="margin-bottom:16px;"><div class="card-h"><div class="card-title">\uD83D\uDDD3 Actividad diaria \u2014 '+esc(panelMonthLabel(m))+'</div></div>';
+  h+='<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Intensidad d\u00eda a d\u00eda (registros del cuantificador).</div>';
+  h+=svgVBars(daily, Math.max(620, daysIn*21), 150, '#16181D');
+  h+='</div>';
+  h+='<div class="card" style="margin-bottom:16px;"><div class="card-h"><div class="card-title">\uD83D\uDCCB Reclamos cargados \u2014 '+rT+'</div></div>';
+  function rBar(lbl,val,col){ const pct=rT?Math.round(val/rT*100):0; return '<div style="margin-bottom:11px;"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;"><span><b>'+lbl+'</b></span><span><b>'+val+'</b> \u00b7 '+pct+'%</span></div><div style="height:15px;background:#F1F2F4;border-radius:8px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:8px;"></div></div></div>'; }
+  h+=rBar('Argentina (ARG)', rArg, '#E4002B');
+  h+=rBar('Uruguay (UY)', rUy, '#0EA5E9');
+  h+='</div>';
   return h;
 }
 
