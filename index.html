@@ -511,6 +511,8 @@ textarea{resize:vertical;min-height:60px;}
         <button class="btn btn-ghost btn-sm" onclick="toggleDealerGrouping()" id="dlr-group-btn" title="Agrupar por zona">⊞ Agrupar</button>
         <select id="dlr-filter-status" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;" onchange="renderDealers()"><option value="activo">Activos</option><option value="fuera">Fuera de servicio</option><option value="todos">Todos</option></select>
         <select id="dlr-filter-prio" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;" onchange="renderDealers()"><option value="">Todos</option><option value="prio">Solo prioritarios</option><option value="noprio">No prioritarios</option></select>
+        <button class="btn btn-ghost btn-sm" id="dlr-contacts-import-btn" onclick="triggerDealerContactsImport()" title="Actualizar mails y datos desde Excel (hojas Motos y Marina)">↻ Importar mails/datos</button>
+        <input type="file" id="dlr-contacts-file" accept=".xlsx,.xls" style="display:none;" onchange="importDealerContacts(this)">
         <button class="btn btn-primary" id="dlr-new-btn" onclick="openNewDealerModal()">+ Nuevo</button>
       </div>
     </div>
@@ -4280,8 +4282,76 @@ function toggleDealerGrouping() {
   renderDealers();
 }
 
+function triggerDealerContactsImport(){ if(!requireSharedEdit()) return; const f=document.getElementById('dlr-contacts-file'); if(f) f.click(); }
+function _cleanEmails(str){
+  if(!str) return '';
+  const seen={}, out=[];
+  String(str).split(/[;,]/).forEach(function(e){ e=e.trim(); if(!e) return; const k=e.toLowerCase(); if(seen[k]) return; seen[k]=1; out.push(e); });
+  return out.join(';');
+}
+function importDealerContacts(input){
+  if(!requireSharedEdit()){ input.value=''; return; }
+  const file=input.files&&input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      let nEmail=0,nDir=0,nLoc=0,nZona=0,nName=0; const noMatch=[]; let dealersChanged=false;
+      function casaCentral(code){
+        ensureSalesPoints(code);
+        const prof=dealerProfiles[code];
+        if(!prof||!prof.salesPoints||!prof.salesPoints.length) return null;
+        return prof.salesPoints.find(function(x){return x.id===prof.casaCentralId;})||prof.salesPoints[0];
+      }
+      function processRow(m, isMarina){
+        const code=normDealerCode(m.code);
+        if(!code) return;
+        const d=DEALERS.find(function(x){return normDealerCode(x.code)===code;});
+        if(!d){ if(noMatch.indexOf(code)===-1) noMatch.push(code); return; }
+        const sp=casaCentral(code); if(!sp) return;
+        const prof=dealerProfiles[code];
+        const email=_cleanEmails(m.email);
+        if(email){ sp.ger_email=email; prof.dlr_email=email; nEmail++; }
+        if(isMarina){
+          if(m.direccion){ sp.address=m.direccion; prof.address=m.direccion; nDir++; }
+          const loc=[m.localidad,m.provincia].filter(Boolean).join(', ');
+          if(loc){ sp.city=loc; prof.city=loc; nLoc++; }
+          if(m.comercial){ sp.name=m.comercial; nName++; }
+          if(m.zona && (d.region||'')!==m.zona){ d.region=m.zona; dealersChanged=true; nZona++; }
+        }
+      }
+      function readSheet(name, mapping, isMarina){
+        const ws=wb.Sheets[name]; if(!ws) return;
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+        if(!rows.length) return;
+        const hdr=rows[0].map(function(h){return String(h).trim().toLowerCase();});
+        const idx={};
+        Object.keys(mapping).forEach(function(key){ const names=mapping[key]; for(let i=0;i<names.length;i++){ const j=hdr.indexOf(names[i]); if(j!==-1){ idx[key]=j; break; } } });
+        for(let r=1;r<rows.length;r++){
+          const row=rows[r]; if(!row) continue;
+          const m={};
+          Object.keys(idx).forEach(function(key){ m[key]=String(row[idx[key]]==null?'':row[idx[key]]).trim(); });
+          if(!m.code) continue;
+          processRow(m, isMarina);
+        }
+      }
+      readSheet('Motos', { code:['nro concesionario','nro','codigo','código','code'], email:['mail','email','correo','mails'] }, false);
+      readSheet('Marina', { code:['nro concesionario','nro','codigo','código'], comercial:['nombre comercial'], email:['mail','email','correo'], direccion:['direccion','dirección'], provincia:['provincia'], localidad:['localidad'], zona:['zona'] }, true);
+      saveDealerProfiles();
+      if(dealersChanged) saveDealers();
+      renderDealers();
+      input.value='';
+      let msg='Listo. Mails cargados en Contacto Gerencial: '+nEmail+'.';
+      if(nDir||nLoc||nZona||nName) msg+='\nMarina — direcciones: '+nDir+' · localidad/provincia: '+nLoc+' · zonas: '+nZona+' · nombre comercial: '+nName+'.';
+      if(noMatch.length) msg+='\n\nOJO: '+noMatch.length+' código(s) del Excel no están en el padrón y se omitieron: '+noMatch.slice(0,12).join(', ')+(noMatch.length>12?'…':'');
+      alert(msg);
+    }catch(err){ alert('Error al leer el Excel: '+err.message); input.value=''; }
+  };
+  reader.readAsArrayBuffer(file);
+}
 function renderDealers() {
   { const _b=document.getElementById('dlr-new-btn'); if(_b) _b.style.display = canEditShared()?'':'none'; }
+  { const _ib=document.getElementById('dlr-contacts-import-btn'); if(_ib) _ib.style.display = canEditShared()?'':'none'; }
   // Populate zone filter once
   const zoneFilterEl = document.getElementById('dlr-filter-zone');
   if (zoneFilterEl && zoneFilterEl.options.length <= 1) {
