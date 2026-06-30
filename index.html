@@ -1675,6 +1675,30 @@ function primaryOwnerZe() {
   }
   return null;
 }
+function cleanupSeededInbox() {
+  // Una sola vez por usuario no-primario: quita copias de actividades/viajes que se
+  // sembraron desde las claves legacy (rol/base) y que en realidad no le pertenecen.
+  if (!currentUser || !currentUser.ze) return;
+  if (primaryOwnerZe() === currentUser.ze) return; // el primario conserva sus datos
+  const flag = 'gg_inbox_cleaned_v2__user_' + currentUser.ze;
+  if (localStorage.getItem(flag)) return;
+  function legacyIds(baseKey) {
+    const ids = {};
+    const keys = [baseKey, baseKey + '__role_garantias'];
+    if (currentRole) keys.push(baseKey + '__role_' + currentRole);
+    keys.forEach(function(kk){ try { const arr = JSON.parse(localStorage.getItem(kk) || '[]'); if (Array.isArray(arr)) arr.forEach(function(x){ if (x && x.id != null) ids[x.id] = 1; }); } catch(e){} });
+    return ids;
+  }
+  const aIds = legacyIds('gg_activities_v1');
+  const aBefore = (activities || []).length;
+  activities = (activities || []).filter(function(a){ return !(a && a.id != null && aIds[a.id]); });
+  if (activities.length !== aBefore) save(STORAGE.activities, activities);
+  const tIds = legacyIds('gg_trips_v1');
+  const tBefore = (trips || []).length;
+  trips = (trips || []).filter(function(t){ return !(t && t.id != null && tIds[t.id]); });
+  if (trips.length !== tBefore) save(STORAGE.trips, trips);
+  localStorage.setItem(flag, '1');
+}
 function stampLegacyOwnership() {
   const pz = primaryOwnerZe();
   const me = currentUser ? currentUser.ze : null;
@@ -1684,11 +1708,9 @@ function stampLegacyOwnership() {
   if (me) {
     (activities || []).forEach(a => {
       if (!a.owner) { a.owner = me; ca = true; }
-      else if (pz && a.owner === pz && a.owner !== me && a.assignee !== me && !((a.watchers||[]).indexOf(me) !== -1)) { a.owner = me; ca = true; }
     });
     (trips || []).forEach(t => {
       if (!t.owner) { t.owner = me; ct = true; }
-      else if (pz && t.owner === pz && t.owner !== me) { t.owner = me; ct = true; }
     });
   }
   // Capacitaciones son compartidas (clave global): se atribuyen al dueño primario.
@@ -1734,6 +1756,7 @@ function reloadRoleScopedState() {
   if (!libraryCategories || libraryCategories.length === 0) { libraryCategories = DEFAULT_LIB_CATEGORIES.slice(); save(STORAGE.libraryCategories, libraryCategories); }
   // Atribuir datos viejos sin dueño al dueño primario (para que no aparezcan en el calendario de otros)
   stampLegacyOwnership();
+  cleanupSeededInbox();
   // Cuantificador y tipos de actividad: por usuario
   try { const s = JSON.parse(localStorage.getItem(scopedKey('gg_cnt_types_v1'))||'null'); CNT_TYPES = (s&&Array.isArray(s)&&s.length>0)?s:JSON.parse(JSON.stringify(DEFAULT_CNT_TYPES)); } catch(e){ CNT_TYPES = JSON.parse(JSON.stringify(DEFAULT_CNT_TYPES)); }
   try { const s = JSON.parse(localStorage.getItem(scopedKey('gg_act_types_v1'))||'null'); actTypes = (s&&Array.isArray(s)&&s.length>0)?s:[...DEFAULT_ACT_TYPES]; } catch(e){ actTypes = [...DEFAULT_ACT_TYPES]; }
@@ -1993,19 +2016,24 @@ function migrateBaseDataToGarantias() {
 function migrateToUserScope() {
   if (typeof currentUser === 'undefined' || !currentUser || !currentUser.ze) return;
   const ze = currentUser.ze;
+  const isPrimary = (primaryOwnerZe() === ze);
   PER_PROFILE_KEYS.forEach(k => {
     const newKey = k + '__user_' + ze;
     if (localStorage.getItem(newKey) !== null) return; // ya tiene su bandeja personal
     let src = null;
-    if (currentRole && currentRole !== 'admin') {
-      const rk = localStorage.getItem(k + '__role_' + currentRole);
-      if (rk && rk !== '[]') src = rk;
+    if (isPrimary) {
+      // Solo el dueño primario hereda los datos previos al scoping por usuario.
+      if (currentRole && currentRole !== 'admin') {
+        const rk = localStorage.getItem(k + '__role_' + currentRole);
+        if (rk && rk !== '[]') src = rk;
+      }
+      if (src === null) {
+        const bk = localStorage.getItem(k);
+        if (bk && bk !== '[]') src = bk;
+      }
     }
-    if (src === null) {
-      const bk = localStorage.getItem(k);
-      if (bk && bk !== '[]') src = bk;
-    }
-    if (src !== null) localStorage.setItem(newKey, src); // copia → se sincroniza a la nube
+    // Los demás usuarios arrancan con su propia bandeja vacía (no heredan actividades ajenas).
+    localStorage.setItem(newKey, src !== null ? src : '[]');
   });
 }
 
