@@ -570,6 +570,7 @@ textarea{resize:vertical;min-height:60px;}
       <div><div class="ph-title">Capacitaciones</div><div class="ph-sub">Plan de capacitación a la red</div></div>
       <div class="ph-actions">
         <button class="btn btn-ghost" onclick="openObjectiveModal()">+ Objetivo</button>
+        <button class="btn btn-ghost" onclick="exportTrainings()">↓ Exportar capacitados</button>
         <button class="btn btn-primary" onclick="openTrainingModal()">+ Nueva capacitación</button>
       </div>
     </div>
@@ -9700,6 +9701,33 @@ function saveObjective() {
 }
 function deleteObjective() { if (!confirm('¿Eliminar objetivo?')) return; objectives = objectives.filter(o => o.id !== editingObjectiveId); save(STORAGE.objectives, objectives); closeModal('modal-objective'); renderObjectives(); }
 
+function exportTrainings(){
+  if(!trainings || !trainings.length){ alert('No hay capacitaciones cargadas para exportar.'); return; }
+  function fdate(d){ if(!d) return ''; const m=String(d).slice(0,10).match(/^(\d{4})-(\d{2})-(\d{2})/); return m?m[3]+'/'+m[2]+'/'+m[1]:String(d); }
+  function dealerName(t){ return (t.dealerIdx!=null && DEALERS[t.dealerIdx]) ? DEALERS[t.dealerIdx].n : ''; }
+  const rows=[], summary=[];
+  const sorted=trainings.slice().sort(function(a,b){ return String(a.date||'').localeCompare(String(b.date||'')); });
+  sorted.forEach(function(t){
+    const dn=dealerName(t);
+    const parts=t.participants||[];
+    summary.push({'Fecha':fdate(t.date),'Tema':t.topic||'','Tipo':t.type||'','Área':t.area||'','Nivel':t.level||'','Concesionario':dn,'Región':t.audience||'','Modalidad':t.mode||'','Estado':t.status||'','N° participantes':parts.length,'Responsable':t.responsible||'','Objetivo':t.objective||''});
+    if(parts.length){
+      parts.forEach(function(p){
+        rows.push({'Fecha':fdate(t.date),'Tema':t.topic||'','Tipo':t.type||'','Área':t.area||'','Nivel':t.level||'','Concesionario':dn||p.dealer||'','Región':t.audience||'','Modalidad':t.mode||'','Estado':t.status||'','Participante':p.name||'','Rol':p.role||'','Asistencia':(t.participantAttendance&&t.participantAttendance[p.id])||'','Responsable':t.responsible||''});
+      });
+    } else {
+      rows.push({'Fecha':fdate(t.date),'Tema':t.topic||'','Tipo':t.type||'','Área':t.area||'','Nivel':t.level||'','Concesionario':dn,'Región':t.audience||'','Modalidad':t.mode||'','Estado':t.status||'','Participante':'(sin participantes cargados)','Rol':'','Asistencia':'','Responsable':t.responsible||''});
+    }
+  });
+  const wb=XLSX.utils.book_new();
+  const ws1=XLSX.utils.json_to_sheet(rows);
+  ws1['!cols']=[{wch:11},{wch:30},{wch:20},{wch:16},{wch:10},{wch:30},{wch:9},{wch:14},{wch:13},{wch:26},{wch:20},{wch:13},{wch:22}];
+  XLSX.utils.book_append_sheet(wb,ws1,'Capacitados');
+  const ws2=XLSX.utils.json_to_sheet(summary);
+  ws2['!cols']=[{wch:11},{wch:30},{wch:20},{wch:16},{wch:10},{wch:30},{wch:9},{wch:14},{wch:13},{wch:15},{wch:20},{wch:34}];
+  XLSX.utils.book_append_sheet(wb,ws2,'Capacitaciones');
+  XLSX.writeFile(wb,'Capacitados - Seguimiento.xlsx');
+}
 let _pendingTnParticipants = [];
 
 function renderTnParticipantsInModal() {
