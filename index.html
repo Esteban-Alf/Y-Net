@@ -9719,7 +9719,22 @@ function exportTrainings(){
       rows.push({'Fecha':fdate(t.date),'Tema':t.topic||'','Tipo':t.type||'','Área':t.area||'','Nivel':t.level||'','Concesionario':dn,'Región':t.audience||'','Modalidad':t.mode||'','Estado':t.status||'','Participante':'(sin participantes cargados)','Rol':'','Asistencia':'','Responsable':t.responsible||''});
     }
   });
+  const people={};
+  sorted.forEach(function(t){
+    (t.participants||[]).forEach(function(p){
+      const key = p.catalogId || ((p.name||'').toLowerCase().trim()+'|'+(p.dealer||'').toLowerCase().trim());
+      if(!key.trim()) return;
+      if(!people[key]) people[key]={name:p.name||'',role:p.role||'',dealer:(dealerName(t)||p.dealer||''),region:t.audience||'',count:0,first:'',last:'',topics:{}};
+      const pe=people[key]; pe.count++;
+      if(p.role && !pe.role) pe.role=p.role;
+      if(!pe.dealer && (dealerName(t)||p.dealer)) pe.dealer=dealerName(t)||p.dealer;
+      if(t.date){ if(!pe.first||t.date<pe.first) pe.first=t.date; if(!pe.last||t.date>pe.last) pe.last=t.date; }
+      if(t.topic) pe.topics[t.topic]=1;
+    });
+  });
+  const personas=Object.keys(people).map(function(k){ const pe=people[k]; return {'Participante':pe.name,'Rol':pe.role,'Concesionario':pe.dealer,'Región':pe.region,'N° capacitaciones':pe.count,'Primera':fdate(pe.first),'Última':fdate(pe.last),'Temas':Object.keys(pe.topics).join(', ')}; }).sort(function(a,b){ return String(a.Participante).localeCompare(String(b.Participante)); });
   const wb=XLSX.utils.book_new();
+  if(personas.length){ const ws0=XLSX.utils.json_to_sheet(personas); ws0['!cols']=[{wch:28},{wch:20},{wch:30},{wch:9},{wch:16},{wch:12},{wch:12},{wch:40}]; XLSX.utils.book_append_sheet(wb,ws0,'Personas capacitadas'); }
   const ws1=XLSX.utils.json_to_sheet(rows);
   ws1['!cols']=[{wch:11},{wch:30},{wch:20},{wch:16},{wch:10},{wch:30},{wch:9},{wch:14},{wch:13},{wch:26},{wch:20},{wch:13},{wch:22}];
   XLSX.utils.book_append_sheet(wb,ws1,'Capacitados');
