@@ -9240,7 +9240,7 @@ function renderTrainings() {
   const actEl = document.querySelector('#page-capacitaciones .ph-actions');
   if (titleEl) titleEl.textContent = 'Centro de Gestión y Seguimiento de Capacitación';
   if (subEl) subEl.textContent = 'Planificación, asistencia, evaluación y seguimiento de la red';
-  if (actEl) actEl.innerHTML = '<button class="btn btn-ghost" onclick="openObjectiveModal()">+ Objetivo</button><button class="btn btn-primary" onclick="openTrainingModal()">+ Nueva capacitación</button>';
+  if (actEl) actEl.innerHTML = '<button class="btn btn-ghost" onclick="openObjectiveModal()">+ Objetivo</button><button class="btn btn-ghost" onclick="exportTrainings()">↓ Exportar capacitados</button><button class="btn btn-primary" onclick="openTrainingModal()">+ Nueva capacitación</button>';
   
   // Show containers again (might be hidden from detail view)
   const objBox = document.getElementById('objectives-container');
