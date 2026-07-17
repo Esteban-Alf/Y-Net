@@ -388,6 +388,7 @@ textarea{resize:vertical;min-height:60px;}
   <div style="padding:12px 16px;text-align:center;">
       <div style="font-size:13px;font-weight:700;color:#fff;letter-spacing:0.08em;">Y-Net</div>
       <div style="font-size:9px;color:rgba(255,255,255,0.5);letter-spacing:0.03em;margin-top:2px;">Warranty Operations Platform</div>
+      <div id="app-version-stamp" style="font-size:9px;color:rgba(255,255,255,0.35);margin-top:3px;"></div>
     </div>
 </aside>
 
@@ -1762,6 +1763,7 @@ function reloadRoleScopedState() {
   try { const s = JSON.parse(localStorage.getItem(scopedKey('gg_cnt_types_v1'))||'null'); CNT_TYPES = (s&&Array.isArray(s)&&s.length>0)?s:JSON.parse(JSON.stringify(DEFAULT_CNT_TYPES)); } catch(e){ CNT_TYPES = JSON.parse(JSON.stringify(DEFAULT_CNT_TYPES)); }
   try { if (Array.isArray(CNT_TYPES) && !CNT_TYPES.some(function(x){ return /statement/i.test((x.id||'')+' '+(x.label||'')); })) { CNT_TYPES.push({id:'STATEMENT', label:'Statement', avgMin:25}); saveCntTypes(); } } catch(e){}
   try { const s = JSON.parse(localStorage.getItem(scopedKey('gg_act_types_v1'))||'null'); actTypes = (s&&Array.isArray(s)&&s.length>0)?s:[...DEFAULT_ACT_TYPES]; } catch(e){ actTypes = [...DEFAULT_ACT_TYPES]; }
+  paintVersionStamp();
 }
 
 
@@ -2568,6 +2570,8 @@ function renderCalendar() {
   document.getElementById('cal-selected-info').textContent = acts.length === 0 ? 'Sin actividades' : acts.length+' actividad'+(acts.length>1?'es':'');
 }
 
+const APP_VERSION = 'v2026.07.17-a';
+function paintVersionStamp(){ const el = document.getElementById('app-version-stamp'); if (el) el.textContent = APP_VERSION; }
 function openDayEntry(id) {
   // Las entradas del día pueden ser actividades reales o virtuales
   // (capacitación / visita / tarea del panel). Cada una abre su propio modal.
