@@ -364,6 +364,7 @@ textarea{resize:vertical;min-height:60px;}
     <div class="nav-item" data-page="concesionarios"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 9l9-6 9 6v10a2 2 0 0 1-2 2h-14a2 2 0 0 1-2-2z"/><path d="M9 21V12h6v9"/></svg> Concesionarios</div>
     <div class="nav-item" data-page="analisis"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg> Desarrollo de Actividades</div>
     <div class="nav-item" data-page="recall"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg> Recall</div>
+    <div class="nav-item" data-page="evaldlr"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></svg> Evaluación Dlr</div>
     <div class="nav-item" data-page="viajes"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12l3-9 6 6 6-6 3 9-3 9-6-6-6 6z"/></svg> Viajes</div>
     <div class="nav-item" data-page="capacitaciones"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5a6 3 0 0 0 12 0v-5"/></svg> Capacitaciones</div>
 
@@ -510,6 +511,8 @@ textarea{resize:vertical;min-height:60px;}
         <button class="btn btn-ghost btn-sm" onclick="toggleDealerGrouping()" id="dlr-group-btn" title="Agrupar por zona">⊞ Agrupar</button>
         <select id="dlr-filter-status" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;" onchange="renderDealers()"><option value="activo">Activos</option><option value="fuera">Fuera de servicio</option><option value="todos">Todos</option></select>
         <select id="dlr-filter-prio" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;" onchange="renderDealers()"><option value="">Todos</option><option value="prio">Solo prioritarios</option><option value="noprio">No prioritarios</option></select>
+        <button class="btn btn-ghost btn-sm" id="dlr-contacts-import-btn" onclick="triggerDealerContactsImport()" title="Actualizar mails y datos desde Excel (hojas Motos y Marina)">↻ Importar mails/datos</button>
+        <input type="file" id="dlr-contacts-file" accept=".xlsx,.xls" style="display:none;" onchange="importDealerContacts(this)">
         <button class="btn btn-primary" id="dlr-new-btn" onclick="openNewDealerModal()">+ Nuevo</button>
       </div>
     </div>
@@ -537,6 +540,18 @@ textarea{resize:vertical;min-height:60px;}
     </div>
   </div>
 
+  <!-- EVALUACIÓN DLR -->
+  <div class="page" id="page-evaldlr">
+    <div class="ph">
+      <div><div class="ph-title">Evaluación Dlr</div><div class="ph-sub">Desempeño mensual de concesionarios</div></div>
+      <div class="ph-actions">
+        <button class="btn btn-primary" id="evd-import-btn" onclick="triggerDlrImport()">↑ Importar Excel de reclamos</button>
+        <input type="file" id="evd-file" accept=".xlsx,.xls" style="display:none;" onchange="importDlrClaims(this)">
+      </div>
+    </div>
+    <div class="content"><div id="evaldlr-container"></div></div>
+  </div>
+
   <!-- VISITAS -->
   <div class="page" id="page-viajes">
     <div class="ph">
@@ -555,6 +570,7 @@ textarea{resize:vertical;min-height:60px;}
       <div><div class="ph-title">Capacitaciones</div><div class="ph-sub">Plan de capacitación a la red</div></div>
       <div class="ph-actions">
         <button class="btn btn-ghost" onclick="openObjectiveModal()">+ Objetivo</button>
+        <button class="btn btn-ghost" onclick="exportTrainings()">↓ Exportar capacitados</button>
         <button class="btn btn-primary" onclick="openTrainingModal()">+ Nueva capacitación</button>
       </div>
     </div>
@@ -1597,7 +1613,7 @@ function findUserByZE(ze) {
 }
 // Which pages each role can see — EDITABLE por el administrador.
 const DEFAULT_ROLE_PAGES = {
-  garantias:      ['dashboard','panel','contador','concesionarios','analisis','recall','viajes','capacitaciones','biblioteca'],
+  garantias:      ['dashboard','panel','contador','concesionarios','analisis','recall','evaldlr','viajes','capacitaciones','biblioteca'],
   tecnica:        ['dashboard','panel','contador','concesionarios','viajes','capacitaciones','biblioteca'],
   repuestos:      ['dashboard','panel','contador','concesionarios','viajes','capacitaciones','biblioteca'],
   comercial:      ['dashboard','panel','contador','concesionarios','viajes','capacitaciones','biblioteca'],
@@ -1608,6 +1624,11 @@ let ROLE_PAGES = JSON.parse(localStorage.getItem('gg_role_pages_v1') || 'null') 
 // El administrador siempre ve todos los módulos de gestión.
 ROLE_PAGES.admin = ['admin-panel','soporte','usuarios','areas','comunicados'];
 function saveRolePages() { localStorage.setItem('gg_role_pages_v1', JSON.stringify(ROLE_PAGES)); }
+// Asegurar páginas nuevas en configuraciones cacheadas
+if (ROLE_PAGES.garantias && ROLE_PAGES.garantias.indexOf('evaldlr') === -1) {
+  const _rp = ROLE_PAGES.garantias.indexOf('recall');
+  if (_rp !== -1) ROLE_PAGES.garantias.splice(_rp+1, 0, 'evaldlr'); else ROLE_PAGES.garantias.push('evaldlr');
+}
 // Admin-only pages (distinct from area pages)
 const ADMIN_PAGES = ['admin-panel','soporte','usuarios','areas','comunicados'];
 // Pages whose DATA is shared across all roles (everyone sees the same)
@@ -1655,6 +1676,30 @@ function primaryOwnerZe() {
   }
   return null;
 }
+function cleanupSeededInbox() {
+  // Una sola vez por usuario no-primario: quita copias de actividades/viajes que se
+  // sembraron desde las claves legacy (rol/base) y que en realidad no le pertenecen.
+  if (!currentUser || !currentUser.ze) return;
+  if (primaryOwnerZe() === currentUser.ze) return; // el primario conserva sus datos
+  const flag = 'gg_inbox_cleaned_v2__user_' + currentUser.ze;
+  if (localStorage.getItem(flag)) return;
+  function legacyIds(baseKey) {
+    const ids = {};
+    const keys = [baseKey, baseKey + '__role_garantias'];
+    if (currentRole) keys.push(baseKey + '__role_' + currentRole);
+    keys.forEach(function(kk){ try { const arr = JSON.parse(localStorage.getItem(kk) || '[]'); if (Array.isArray(arr)) arr.forEach(function(x){ if (x && x.id != null) ids[x.id] = 1; }); } catch(e){} });
+    return ids;
+  }
+  const aIds = legacyIds('gg_activities_v1');
+  const aBefore = (activities || []).length;
+  activities = (activities || []).filter(function(a){ return !(a && a.id != null && aIds[a.id]); });
+  if (activities.length !== aBefore) save(STORAGE.activities, activities);
+  const tIds = legacyIds('gg_trips_v1');
+  const tBefore = (trips || []).length;
+  trips = (trips || []).filter(function(t){ return !(t && t.id != null && tIds[t.id]); });
+  if (trips.length !== tBefore) save(STORAGE.trips, trips);
+  localStorage.setItem(flag, '1');
+}
 function stampLegacyOwnership() {
   const pz = primaryOwnerZe();
   const me = currentUser ? currentUser.ze : null;
@@ -1664,11 +1709,9 @@ function stampLegacyOwnership() {
   if (me) {
     (activities || []).forEach(a => {
       if (!a.owner) { a.owner = me; ca = true; }
-      else if (pz && a.owner === pz && a.owner !== me && a.assignee !== me && !((a.watchers||[]).indexOf(me) !== -1)) { a.owner = me; ca = true; }
     });
     (trips || []).forEach(t => {
       if (!t.owner) { t.owner = me; ct = true; }
-      else if (pz && t.owner === pz && t.owner !== me) { t.owner = me; ct = true; }
     });
   }
   // Capacitaciones son compartidas (clave global): se atribuyen al dueño primario.
@@ -1714,8 +1757,10 @@ function reloadRoleScopedState() {
   if (!libraryCategories || libraryCategories.length === 0) { libraryCategories = DEFAULT_LIB_CATEGORIES.slice(); save(STORAGE.libraryCategories, libraryCategories); }
   // Atribuir datos viejos sin dueño al dueño primario (para que no aparezcan en el calendario de otros)
   stampLegacyOwnership();
+  cleanupSeededInbox();
   // Cuantificador y tipos de actividad: por usuario
   try { const s = JSON.parse(localStorage.getItem(scopedKey('gg_cnt_types_v1'))||'null'); CNT_TYPES = (s&&Array.isArray(s)&&s.length>0)?s:JSON.parse(JSON.stringify(DEFAULT_CNT_TYPES)); } catch(e){ CNT_TYPES = JSON.parse(JSON.stringify(DEFAULT_CNT_TYPES)); }
+  try { if (Array.isArray(CNT_TYPES) && !CNT_TYPES.some(function(x){ return /statement/i.test((x.id||'')+' '+(x.label||'')); })) { CNT_TYPES.push({id:'STATEMENT', label:'Statement', avgMin:25}); saveCntTypes(); } } catch(e){}
   try { const s = JSON.parse(localStorage.getItem(scopedKey('gg_act_types_v1'))||'null'); actTypes = (s&&Array.isArray(s)&&s.length>0)?s:[...DEFAULT_ACT_TYPES]; } catch(e){ actTypes = [...DEFAULT_ACT_TYPES]; }
 }
 
@@ -1973,19 +2018,24 @@ function migrateBaseDataToGarantias() {
 function migrateToUserScope() {
   if (typeof currentUser === 'undefined' || !currentUser || !currentUser.ze) return;
   const ze = currentUser.ze;
+  const isPrimary = (primaryOwnerZe() === ze);
   PER_PROFILE_KEYS.forEach(k => {
     const newKey = k + '__user_' + ze;
     if (localStorage.getItem(newKey) !== null) return; // ya tiene su bandeja personal
     let src = null;
-    if (currentRole && currentRole !== 'admin') {
-      const rk = localStorage.getItem(k + '__role_' + currentRole);
-      if (rk && rk !== '[]') src = rk;
+    if (isPrimary) {
+      // Solo el dueño primario hereda los datos previos al scoping por usuario.
+      if (currentRole && currentRole !== 'admin') {
+        const rk = localStorage.getItem(k + '__role_' + currentRole);
+        if (rk && rk !== '[]') src = rk;
+      }
+      if (src === null) {
+        const bk = localStorage.getItem(k);
+        if (bk && bk !== '[]') src = bk;
+      }
     }
-    if (src === null) {
-      const bk = localStorage.getItem(k);
-      if (bk && bk !== '[]') src = bk;
-    }
-    if (src !== null) localStorage.setItem(newKey, src); // copia → se sincroniza a la nube
+    // Los demás usuarios arrancan con su propia bandeja vacía (no heredan actividades ajenas).
+    localStorage.setItem(newKey, src !== null ? src : '[]');
   });
 }
 
@@ -2085,6 +2135,7 @@ const STORAGE = {
   counter: 'gg_counter_v1',
   cases: 'gg_cases_v1',
   recalls: 'gg_recalls_v1',
+  dlrClaims: 'gg_dlr_claims_v1',
   visits: 'gg_visits_v1',
   trainings: 'gg_trainings_v1',
   objectives: 'gg_objectives_v1',
@@ -2125,12 +2176,13 @@ function scopedKey(k) {
   return k;
 }
 const load = k => { try { return JSON.parse(localStorage.getItem(scopedKey(k)) || '[]'); } catch(e) { return []; } };
-const save = (k, v) => localStorage.setItem(scopedKey(k), JSON.stringify(v));
+const save = (k, v) => { try { localStorage.setItem(scopedKey(k), JSON.stringify(v)); } catch(e) { console.warn('save', k, e); } };
 
 let activities = load(STORAGE.activities);
 let counterLog = load(STORAGE.counter);
 let cases = load(STORAGE.cases);
 let recalls = load(STORAGE.recalls);
+let dlrClaims = load(STORAGE.dlrClaims);
 let visits = load(STORAGE.visits);
 let trips = load(STORAGE.trips);
 let tripVisits = load(STORAGE.tripVisits);
@@ -2278,6 +2330,7 @@ const DEFAULT_CNT_TYPES = [
   {id:'RECLAMO_ARG', label:'Reclamo ARG', avgMin:20},
   {id:'RECLAMO_UY', label:'Reclamo UY', avgMin:20},
   {id:'FACTURA', label:'Factura', avgMin:15},
+  {id:'STATEMENT', label:'Statement', avgMin:25},
   {id:'SOPORTE_GARANTIA', label:'Soporte Gtía.', avgMin:20},
   {id:'ACTIVIDAD', label:'Actividad', avgMin:30}
 ];
@@ -2314,6 +2367,7 @@ document.querySelectorAll('.nav-item').forEach(el => {
     if (page === 'concesionarios') renderDealers();
     if (page === 'analisis') renderCases();
     if (page === 'recall') renderRecalls();
+    if (page === 'evaldlr') renderEvalDlr();
     if (page === 'viajes') renderTrips();
     if (page === 'capacitaciones') renderTrainings();
     if (page === 'biblioteca') renderLibrary();
@@ -2421,7 +2475,7 @@ function getActivitiesOn(dateStr) {
         title: 'Capacitación: ' + t.topic,
         type: 'Capacitación', country: t.audience,
         date: t.date, time: t.time || '', duration: t.duration || 60,
-        status: t.status === 'Realizada' ? 'Hecho' : t.status === 'Cancelada' ? 'Cancelada' : 'Pendiente',
+        status: (t.status === 'Finalizada' || t.status === 'Realizada') ? 'Hecho' : t.status === 'En curso' ? 'En curso' : t.status === 'Cancelada' ? 'Cancelada' : 'Pendiente',
         notes: t.notes || ''
       });
     }
@@ -2514,6 +2568,15 @@ function renderCalendar() {
   document.getElementById('cal-selected-info').textContent = acts.length === 0 ? 'Sin actividades' : acts.length+' actividad'+(acts.length>1?'es':'');
 }
 
+function openDayEntry(id) {
+  // Las entradas del día pueden ser actividades reales o virtuales
+  // (capacitación / visita / tarea del panel). Cada una abre su propio modal.
+  const a = getActivitiesOn(selectedDate).find(x => x.id === id);
+  if (a && a.virtual === 'training') { openTrainingModal(a.refId); return; }
+  if (a && a.virtual === 'visit') { openVisitModal(a.refId); return; }
+  if (a && a.virtual === 'paneltask') { openPanelTaskModal(a.refId); return; }
+  openActivityModal(id);
+}
 function renderDayList() {
   const acts = getActivitiesOn(selectedDate).sort((a,b) => (a.time||'00:00').localeCompare(b.time||'00:00'));
   const list = document.getElementById('day-list');
@@ -2526,7 +2589,7 @@ function renderDayList() {
   list.innerHTML = acts.map(a => {
     const sb = a.status === 'Hecho' ? 'bdg-done' : a.status === 'En curso' ? 'bdg-prog' : a.status === 'Cancelada' ? 'bdg-canc' : 'bdg-pend';
     const cb = a.country === 'ARG' ? 'bdg-arg' : a.country === 'UY' ? 'bdg-uy' : 'bdg-amb';
-    return '<div class="day-item"><div class="day-time">'+(a.time||'—')+'</div><div class="day-info"><div class="day-title">'+esc(a.title)+'</div><div class="day-meta">'+esc(a.type)+(a.duration?' · '+a.duration+' min':'')+(a.due?' · ⏰ vence '+a.due:'')+(a.notes?' · '+esc(a.notes.slice(0,40)):'')+'</div></div><div class="day-actions">'+activityShareBadge(a)+(a.priority==='Alta'?'<span class="bdg" style="background:#FEE2E2;color:#B91C1C;">Alta</span>':a.priority==='Baja'?'<span class="bdg" style="background:var(--bg-page);color:var(--text-muted);">Baja</span>':'')+'<span class="bdg '+cb+'">'+a.country+'</span><span class="bdg '+sb+'">'+a.status+'</span><button class="btn btn-ghost btn-icon" onclick="openActivityModal(\''+a.id+'\')">✎</button></div></div>';
+    return '<div class="day-item"><div class="day-time">'+(a.time||'—')+'</div><div class="day-info"><div class="day-title">'+esc(a.title)+'</div><div class="day-meta">'+esc(a.type)+(a.duration?' · '+a.duration+' min':'')+(a.due?' · ⏰ vence '+a.due:'')+(a.notes?' · '+esc(a.notes.slice(0,40)):'')+'</div></div><div class="day-actions">'+activityShareBadge(a)+(a.priority==='Alta'?'<span class="bdg" style="background:#FEE2E2;color:#B91C1C;">Alta</span>':a.priority==='Baja'?'<span class="bdg" style="background:var(--bg-page);color:var(--text-muted);">Baja</span>':'')+'<span class="bdg '+cb+'">'+a.country+'</span><span class="bdg '+sb+'">'+a.status+'</span><button class="btn btn-ghost btn-icon" onclick="openDayEntry(\''+a.id+'\')" title="'+(a.virtual==='training'?'Editar capacitación':a.virtual==='visit'?'Editar visita':a.virtual==='paneltask'?'Editar tarea del panel':'Editar actividad')+'">✎</button></div></div>';
   }).join('');
 }
 
@@ -2784,6 +2847,75 @@ function acceptSharedTask(id, accept){
   if (t.inCalendar) renderDashboard();
 }
 
+function myVisibleActivities(){
+  return (activities || []).filter(activityVisibleToMe);
+}
+function _actStatusBadge(st){
+  const cls = st === 'Hecho' ? 'bdg-done' : st === 'En curso' ? 'bdg-prog' : st === 'Cancelada' ? 'bdg-canc' : 'bdg-pend';
+  return '<span class="bdg '+cls+'">'+esc(st || 'Pendiente')+'</span>';
+}
+function renderPanelActivitiesByMonth(){
+  const acts = myVisibleActivities();
+  let h = '<div class="card" style="margin-bottom:16px;">';
+  h += '<div class="card-h"><div class="card-title">🗓 Actividades por mes</div></div>';
+  if (acts.length === 0){
+    h += '<div style="font-size:12.5px;color:var(--text-muted);padding:12px 4px;text-align:center;">Todavía no cargaste actividades. Las que crees en el Dashboard van a aparecer acá, mes a mes.</div></div>';
+    return h;
+  }
+  const oneTime = acts.filter(a => a.recur !== 'monthly' && a.recur !== 'weekly');
+  const recurring = acts.filter(a => a.recur === 'monthly' || a.recur === 'weekly');
+  const monthsSet = new Set();
+  oneTime.forEach(a => { if (a.date) monthsSet.add(a.date.slice(0,7)); });
+  const now = new Date();
+  for (let i=0;i<3;i++){ const d = new Date(now.getFullYear(), now.getMonth()+i, 1); monthsSet.add(d.toISOString().slice(0,7)); }
+  const months = Array.from(monthsSet).sort();
+  const curMonth = now.toISOString().slice(0,7);
+  const rowFor = function(a, isRec){
+    let meta;
+    if (isRec){
+      meta = a.recur === 'weekly'
+        ? '🔁 Semanal · ' + new Date(((a.date||(curMonth+'-01')))+'T00:00:00').toLocaleDateString('es-AR',{weekday:'long'})
+        : '🔁 Mensual · día ' + (((a.date||'').slice(8,10)) || '—');
+    } else {
+      meta = (a.date||'').slice(8,10)+'/'+(a.date||'').slice(5,7) + (a.time ? ' · '+a.time : '');
+    }
+    let s = '<div onclick="openActivityModal(\''+a.id+'\')" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 9px;border-radius:7px;cursor:pointer;background:var(--bg-page);margin-bottom:6px;">';
+    s += '<div style="min-width:0;"><div style="font-weight:600;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(a.title)+'</div>';
+    s += '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">'+meta+(a.type?' · '+esc(a.type):'')+(a.priority&&a.priority!=='Media'?' · '+esc(a.priority):'')+'</div></div>';
+    s += '<div style="flex-shrink:0;">'+_actStatusBadge(a.status)+'</div></div>';
+    return s;
+  };
+  let shown = 0;
+  months.forEach(m => {
+    const mOne = oneTime.filter(a => (a.date||'').slice(0,7) === m).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    const mRec = recurring.filter(a => (a.date||'').slice(0,7) <= m);
+    if (mOne.length === 0 && mRec.length === 0) return;
+    shown++;
+    const done = mOne.filter(a => a.status === 'Hecho').length;
+    const pct = mOne.length ? Math.round(done/mOne.length*100) : 0;
+    const label = new Date(m+'-01T00:00:00').toLocaleDateString('es-AR',{month:'long',year:'numeric'});
+    const isCur = (m === curMonth);
+    h += '<div style="border:1px solid var(--border);border-radius:10px;padding:12px 13px;margin-bottom:11px;'+(isCur?'border-left:3px solid var(--primary);':'')+'">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">';
+    h += '<div style="font-weight:700;font-size:13.5px;text-transform:capitalize;">'+label+(isCur?' · <span style="color:var(--primary);font-size:11px;text-transform:none;">este mes</span>':'')+'</div>';
+    if (mOne.length) h += '<div style="font-size:11.5px;color:var(--text-muted);">'+done+'/'+mOne.length+' hechas · '+pct+'%</div>';
+    h += '</div>';
+    if (mOne.length){
+      const barColor = pct>=80?'#047857':pct>=40?'#D97706':'var(--primary)';
+      h += '<div class="progress" style="margin-bottom:10px;"><div class="progress-bar" style="width:'+pct+'%;background:'+barColor+';"></div></div>';
+    }
+    mOne.forEach(a => h += rowFor(a, false));
+    if (mRec.length){
+      h += '<div style="font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin:8px 0 5px;">Fijas / recurrentes</div>';
+      mRec.forEach(a => h += rowFor(a, true));
+    }
+    h += '</div>';
+  });
+  if (shown === 0) h += '<div style="font-size:12.5px;color:var(--text-muted);padding:12px 4px;text-align:center;">Sin actividades en los próximos meses.</div>';
+  h += '</div>';
+  return h;
+}
+
 function renderPanel() {
   const c = document.getElementById('panel-container');
   if (!c) return;
@@ -2845,22 +2977,53 @@ function renderPanel() {
   c.innerHTML = h;
 }
 
+let _panelMonth = null;
+function panelMonthKey(){ if(!_panelMonth) _panelMonth = new Date().toISOString().slice(0,7); return _panelMonth; }
+function panelPrevMonthKey(){ const d=new Date(panelMonthKey()+'-01T00:00:00'); d.setMonth(d.getMonth()-1); return d.toISOString().slice(0,7); }
+function panelShiftMonth(delta){ const d=new Date(panelMonthKey()+'-01T00:00:00'); d.setMonth(d.getMonth()+delta); const k=d.toISOString().slice(0,7); if(k>new Date().toISOString().slice(0,7)) return; _panelMonth=k; renderPanel(); }
+function panelMonthLabel(m){ const d=new Date(m+'-01T00:00:00'); const l=d.toLocaleDateString('es-AR',{month:'long',year:'numeric'}); return l.charAt(0).toUpperCase()+l.slice(1); }
+function cntMonthCount(typeId,m){ if(!typeId) return 0; return (counterLog||[]).filter(function(e){return e.type===typeId && (e.ts||'').slice(0,7)===m;}).length; }
+function cntTypeIdMatch(rx){ const t=(CNT_TYPES||[]).find(function(x){return rx.test(((x.id||'')+' '+(x.label||'')));}); return t?t.id:null; }
+function panelTrainingsMonth(m){ return (trainings||[]).filter(function(t){return (t.date||'').slice(0,7)===m;}).length; }
+function panelVisitsMonth(m){ return (tripVisits||[]).filter(function(v){return (v.date||'').slice(0,7)===m;}).length; }
+function panelTotalLoad(m){ let n=(counterLog||[]).filter(function(e){return (e.ts||'').slice(0,7)===m;}).length; return n + panelTrainingsMonth(m) + panelVisitsMonth(m); }
+function panelDeltaHtml(cur,prv){ let dir,txt; if(prv===0){ dir=cur>0?1:0; txt=cur>0?'nuevo':'='; } else { const pct=Math.round((cur-prv)/prv*100); dir=pct>0?1:(pct<0?-1:0); txt=(pct>0?'+':'')+pct+'%'; } const col=dir>0?'#047857':(dir<0?'#E4002B':'#9AA0A8'); const arr=dir>0?'\u25B2':(dir<0?'\u25BC':'\u25AC'); return '<span style="font-size:10.5px;font-weight:700;color:'+col+';">'+arr+' '+txt+'</span>'; }
+function svgDonut(data,size,thick){ const r=(size-thick)/2, cx=size/2, cy=size/2, C=2*Math.PI*r; const total=data.reduce(function(a,d){return a+d.val;},0); let off=0, segs=''; if(total<=0){ segs='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="#ECEEF1" stroke-width="'+thick+'"/>'; } else data.forEach(function(d){ if(d.val<=0) return; const len=(d.val/total)*C; segs+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+d.color+'" stroke-width="'+thick+'" stroke-dasharray="'+len.toFixed(2)+' '+(C-len).toFixed(2)+'" stroke-dashoffset="'+(-off).toFixed(2)+'" transform="rotate(-90 '+cx+' '+cy+')"/>'; off+=len; }); return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'+segs+'</svg>'; }
+function svgVBars(data,w,h,defColor){ const max=Math.max.apply(null,data.map(function(d){return d.val;}).concat([1])); const n=data.length||1, gap=Math.max(3,w*0.015), bw=(w-gap*(n-1))/n; let s=''; data.forEach(function(d,i){ const bh=Math.max(2,(d.val/max)*(h-30)); const x=i*(bw+gap); const y=h-22-bh; const col=d.color||defColor||'#E4002B'; s+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+bh.toFixed(1)+'" rx="3" fill="'+col+'"/>'; if(d.val) s+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(y-4).toFixed(1)+'" font-size="11" fill="#374151" text-anchor="middle" font-weight="700">'+d.val+'</text>'; s+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(h-6)+'" font-size="10" fill="#9AA0A8" text-anchor="middle">'+esc(d.label)+'</text>'; }); return '<svg width="100%" height="'+h+'" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="xMidYMid meet" style="display:block;">'+s+'</svg>'; }
+function panelKpiCard(icon,label,color,cur,prv,hint){ let h='<div style="position:relative;border:1px solid var(--border);border-radius:12px;padding:13px 14px 12px;background:#fff;overflow:hidden;">'; h+='<div style="position:absolute;top:0;left:0;width:100%;height:3px;background:'+color+';"></div>'; h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'; h+='<span style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;background:'+color+'22;font-size:15px;">'+icon+'</span>'; h+='<span style="font-size:11.5px;color:var(--text-secondary);font-weight:600;line-height:1.15;">'+esc(label)+'</span></div>'; h+='<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:6px;">'; h+='<span style="font-size:27px;font-weight:800;line-height:1;">'+cur+'</span>'; h+=(hint?'<span style="font-size:9.5px;color:var(--text-muted);text-align:right;max-width:90px;">'+esc(hint)+'</span>':panelDeltaHtml(cur,prv)); h+='</div></div>'; return h; }
 function renderPanelKpis() {
-  const all = myVisibleTasks();
-  const total = all.length;
-  const pend = all.filter(t => t.status === 'Pendiente').length;
-  const curso = all.filter(t => t.status === 'En curso').length;
-  const done = all.filter(t => t.status === 'Completado').length;
-  const urg = all.filter(t => t.status !== 'Completado' && t.priority === 'Urgente').length;
-  let h = '<div class="card" style="margin-bottom:16px;">';
-  h += '<div class="card-h"><div class="card-title">📊 KPIs del mes</div></div>';
-  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
-  h += monthlyKpiBox('Total tareas', total, '#374151');
-  h += monthlyKpiBox('Pendientes', pend, '#6B7280');
-  h += monthlyKpiBox('En curso', curso, '#6D28D9');
-  h += monthlyKpiBox('Completadas', done, '#047857');
-  h += monthlyKpiBox('Urgentes abiertas', urg, '#E60012');
-  h += '</div></div>';
+  const m = panelMonthKey(), pm = panelPrevMonthKey();
+  const now = new Date().toISOString().slice(0,7);
+  const stId = cntTypeIdMatch(/statement/i);
+  const totalLoad = panelTotalLoad(m);
+  const series=[]; { const d=new Date(m+'-01T00:00:00'); for(let i=5;i>=0;i--){ const dd=new Date(d); dd.setMonth(dd.getMonth()-i); const mk=dd.toISOString().slice(0,7); series.push({label:panelMonthLabel(mk).slice(0,3), val:panelTotalLoad(mk)}); } }
+  let s3=0,c3=0; { const d=new Date(m+'-01T00:00:00'); for(let i=1;i<=3;i++){ const dd=new Date(d); dd.setMonth(dd.getMonth()-i); s3+=panelTotalLoad(dd.toISOString().slice(0,7)); c3++; } }
+  const avg3=c3?Math.round(s3/c3):0; const vsAvg=avg3>0?Math.round((totalLoad-avg3)/avg3*100):0;
+  let h='';
+  h+='<div class="card" style="margin-bottom:16px;background:linear-gradient(135deg,#16181D 0%,#27313C 100%);color:#fff;border:none;">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">';
+  h+='<div><div style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:#9AA9B8;font-weight:700;">Mis KPIs del mes</div><div style="font-size:22px;font-weight:800;margin-top:2px;">'+esc(panelMonthLabel(m))+'</div></div>';
+  h+='<div style="display:flex;align-items:center;gap:6px;"><button onclick="panelShiftMonth(-1)" style="cursor:pointer;background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:7px;padding:6px 11px;font-size:13px;">\u25C0</button><button onclick="panelShiftMonth(1)" style="cursor:'+(m>=now?'default':'pointer')+';background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:7px;padding:6px 11px;font-size:13px;'+(m>=now?'opacity:.35;':'')+'">\u25B6</button></div></div>';
+  h+='<div style="display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap;margin-top:14px;">';
+  h+='<div><div style="font-size:46px;font-weight:800;line-height:1;">'+totalLoad+'</div><div style="font-size:11.5px;color:#9AA9B8;margin-top:3px;">registros de actividad este mes</div></div>';
+  h+='<div style="flex:1;min-width:210px;max-width:430px;">';
+  { const mx=Math.max.apply(null,series.map(function(s){return s.val;}).concat([1])); let bars=''; series.forEach(function(s,i){ const bh=Math.max(3,(s.val/mx)*46); const last=i===series.length-1; bars+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;"><div style="font-size:9px;color:#8A95A2;">'+s.val+'</div><div style="width:72%;height:'+bh+'px;border-radius:3px 3px 0 0;background:'+(last?'#E4002B':'rgba(255,255,255,.30)')+';"></div><div style="font-size:8.5px;color:#8A95A2;">'+esc(s.label)+'</div></div>'; }); h+='<div style="display:flex;align-items:flex-end;gap:5px;height:76px;">'+bars+'</div>'; }
+  h+='</div>';
+  const vcol=vsAvg>0?'#34D399':(vsAvg<0?'#FCA5A5':'#9AA9B8');
+  h+='<div style="text-align:right;min-width:118px;"><div style="font-size:10.5px;color:#9AA9B8;">vs. promedio 3 meses</div><div style="font-size:23px;font-weight:800;color:'+vcol+';">'+(vsAvg>0?'+':'')+vsAvg+'%</div>'+(vsAvg>=15?'<div style="font-size:10.5px;color:#FCA5A5;font-weight:700;">Mes intenso</div>':'')+'</div>';
+  h+='</div></div>';
+  const varM=[['\uD83D\uDCF1','WhatsApp','#25D366','WHATSAPP'],['\uD83D\uDCDE','Llamadas','#1E40AF','LLAMADA'],['\u2709\uFE0F','Mails','#D97706','MAIL'],['\uD83C\uDF10','Consultas Suite Web','#0891B2','SUITE_WEB'],['\uD83D\uDEE0\uFE0F','Soporte','#7C3AED','SOPORTE_GARANTIA'],['\uD83D\uDCCB','Reclamos ARG','#E4002B','RECLAMO_ARG'],['\uD83D\uDCCB','Reclamos UY','#0EA5E9','RECLAMO_UY'],['\uD83E\uDDFE','Facturas procesadas','#059669','FACTURA']];
+  h+='<div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin:4px 2px 9px;">Actividades variables</div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;">';
+  varM.forEach(function(k){ h+=panelKpiCard(k[0],k[1],k[2],cntMonthCount(k[3],m),cntMonthCount(k[3],pm)); });
+  h+=panelKpiCard('\uD83C\uDF93','Capacitaciones','#DB2777',panelTrainingsMonth(m),panelTrainingsMonth(pm));
+  h+=panelKpiCard('\uD83E\uDDED','Visitas','#CA8A04',panelVisitsMonth(m),panelVisitsMonth(pm));
+  h+=panelKpiCard('\uD83D\uDCCA','Encuestas','#6B7280',0,0,'m\u00f3dulo a definir');
+  h+='</div>';
+  h+='<div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin:15px 2px 9px;">Actividades fijas</div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:16px;">';
+  h+=panelKpiCard('\uD83D\uDCC4','Statement','#16181D',stId?cntMonthCount(stId,m):0,stId?cntMonthCount(stId,pm):0,stId?null:'cre\u00e1 el tipo en el cuantificador');
+  h+='</div>';
   return h;
 }
 
@@ -2891,34 +3054,34 @@ function renderPanelFilters() {
 }
 
 function renderPanelCharts() {
-  const all = myVisibleTasks();
-  if (all.length === 0) return '';
-  const total = all.length;
-  const byStatus = { 'Pendiente':0, 'En curso':0, 'Completado':0 };
-  all.forEach(t => { if (byStatus[t.status] != null) byStatus[t.status]++; });
-  const segs = [
-    { label:'Completado', val:byStatus['Completado'], color:'#047857' },
-    { label:'En curso',   val:byStatus['En curso'],   color:'#6D28D9' },
-    { label:'Pendiente',  val:byStatus['Pendiente'],  color:'#9CA3AF' }
-  ];
-  const R=52, C=2*Math.PI*R; let off=0, arcs='';
-  segs.forEach(s => { if (!s.val) return; const len=s.val/total*C; arcs += '<circle cx="70" cy="70" r="'+R+'" fill="none" stroke="'+s.color+'" stroke-width="19" stroke-dasharray="'+len.toFixed(2)+' '+(C-len).toFixed(2)+'" stroke-dashoffset="'+(-off).toFixed(2)+'" transform="rotate(-90 70 70)"/>'; off += len; });
-  const donePct = Math.round(byStatus['Completado']/total*100);
-  const donut = '<svg viewBox="0 0 140 140" width="124" height="124"><circle cx="70" cy="70" r="52" fill="none" stroke="#EEF0F3" stroke-width="19"/>'+arcs+'<text x="70" y="66" text-anchor="middle" font-size="26" font-weight="700" fill="#16181D">'+donePct+'%</text><text x="70" y="86" text-anchor="middle" font-size="10" fill="#6A7180">completado</text></svg>';
-  const legend = segs.map(s => '<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-bottom:6px;"><span style="width:11px;height:11px;border-radius:3px;background:'+s.color+';"></span>'+s.label+'<b style="margin-left:auto;">'+s.val+'</b></div>').join('');
-
-  const byPrio = { 'Urgente':0,'Alta':0,'Normal':0,'Baja':0 };
-  all.forEach(t => { if (byPrio[t.priority] != null) byPrio[t.priority]++; });
-  const maxP = Math.max(1, byPrio['Urgente'], byPrio['Alta'], byPrio['Normal'], byPrio['Baja']);
-  const prColors = { 'Urgente':'#E60012','Alta':'#EA580C','Normal':'#1E40AF','Baja':'#6B7280' };
-  const bars = Object.keys(byPrio).map(p => '<div style="margin-bottom:9px;"><div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px;"><span>'+p+'</span><b>'+byPrio[p]+'</b></div><div style="height:8px;background:#EEF0F3;border-radius:6px;overflow:hidden;"><div style="height:100%;width:'+Math.round(byPrio[p]/maxP*100)+'%;background:'+prColors[p]+';border-radius:6px;transition:width .3s;"></div></div></div>').join('');
-
-  let h = '<div class="card" style="margin-bottom:16px;">';
-  h += '<div class="card-h"><div class="card-title">📈 Resumen visual</div></div>';
-  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;align-items:center;">';
-  h += '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:center;">'+donut+'<div style="flex:1;min-width:130px;">'+legend+'</div></div>';
-  h += '<div><div style="font-size:11.5px;color:var(--text-muted);font-weight:600;margin-bottom:8px;">Por prioridad</div>'+bars+'</div>';
-  h += '</div></div>';
+  const m = panelMonthKey();
+  const channels=[{label:'WhatsApp',color:'#25D366',val:cntMonthCount('WHATSAPP',m)},{label:'Llamadas',color:'#1E40AF',val:cntMonthCount('LLAMADA',m)},{label:'Mails',color:'#D97706',val:cntMonthCount('MAIL',m)},{label:'Suite Web',color:'#0891B2',val:cntMonthCount('SUITE_WEB',m)},{label:'Soporte',color:'#7C3AED',val:cntMonthCount('SOPORTE_GARANTIA',m)}];
+  const chTotal=channels.reduce(function(a,c){return a+c.val;},0);
+  const series=[]; { const d=new Date(m+'-01T00:00:00'); for(let i=5;i>=0;i--){ const dd=new Date(d); dd.setMonth(dd.getMonth()-i); const mk=dd.toISOString().slice(0,7); series.push({label:panelMonthLabel(mk).slice(0,3), val:panelTotalLoad(mk), color:(mk===m?'#E4002B':'#C9CDD3')}); } }
+  const daysIn=new Date(parseInt(m.slice(0,4)),parseInt(m.slice(5,7)),0).getDate();
+  const daily=[]; for(let dn=1;dn<=daysIn;dn++){ const ds=m+'-'+String(dn).padStart(2,'0'); const cnt=(counterLog||[]).filter(function(e){return (e.ts||'').slice(0,10)===ds;}).length; daily.push({label:String(dn), val:cnt, color:'#16181D'}); }
+  const rArg=cntMonthCount('RECLAMO_ARG',m), rUy=cntMonthCount('RECLAMO_UY',m), rT=rArg+rUy;
+  let h='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-bottom:16px;">';
+  h+='<div class="card"><div class="card-h"><div class="card-title">\uD83D\uDCDE \u00bfEn qu\u00e9 se va el d\u00eda?</div></div>';
+  h+='<div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;">Distribuci\u00f3n de interacciones por canal este mes.</div>';
+  h+='<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">';
+  h+='<div style="position:relative;width:130px;height:130px;flex-shrink:0;">'+svgDonut(channels,130,22)+'<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;"><span style="font-size:26px;font-weight:800;">'+chTotal+'</span><span style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;">contactos</span></div></div>';
+  h+='<div style="flex:1;min-width:140px;">';
+  channels.forEach(function(c){ const pct=chTotal?Math.round(c.val/chTotal*100):0; h+='<div style="display:flex;align-items:center;gap:7px;margin-bottom:7px;"><span style="width:11px;height:11px;border-radius:3px;background:'+c.color+';flex-shrink:0;"></span><span style="font-size:12px;flex:1;">'+esc(c.label)+'</span><span style="font-size:12px;font-weight:700;">'+c.val+'</span><span style="font-size:10.5px;color:var(--text-muted);width:36px;text-align:right;">'+pct+'%</span></div>'; });
+  h+='</div></div></div>';
+  h+='<div class="card"><div class="card-h"><div class="card-title">\uD83D\uDCC8 Carga por mes</div></div>';
+  h+='<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Volumen total de actividad en los \u00faltimos 6 meses.</div>';
+  h+=svgVBars(series,600,170,'#C9CDD3');
+  h+='</div></div>';
+  h+='<div class="card" style="margin-bottom:16px;"><div class="card-h"><div class="card-title">\uD83D\uDDD3 Actividad diaria \u2014 '+esc(panelMonthLabel(m))+'</div></div>';
+  h+='<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Intensidad d\u00eda a d\u00eda (registros del cuantificador).</div>';
+  h+=svgVBars(daily, Math.max(620, daysIn*21), 150, '#16181D');
+  h+='</div>';
+  h+='<div class="card" style="margin-bottom:16px;"><div class="card-h"><div class="card-title">\uD83D\uDCCB Reclamos cargados \u2014 '+rT+'</div></div>';
+  function rBar(lbl,val,col){ const pct=rT?Math.round(val/rT*100):0; return '<div style="margin-bottom:11px;"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;"><span><b>'+lbl+'</b></span><span><b>'+val+'</b> \u00b7 '+pct+'%</span></div><div style="height:15px;background:#F1F2F4;border-radius:8px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:8px;"></div></div></div>'; }
+  h+=rBar('Argentina (ARG)', rArg, '#E4002B');
+  h+=rBar('Uruguay (UY)', rUy, '#0EA5E9');
+  h+='</div>';
   return h;
 }
 
@@ -3117,7 +3280,7 @@ function savePanelTask() {
   savePanelStores();
   closeModal('modal-panel-task');
   renderPanel();
-  if (obj.inCalendar) renderDashboard();
+  if (obj.inCalendar || document.getElementById('page-dashboard').classList.contains('active')) renderDashboard();
 }
 
 function deletePanelTask(id) {
@@ -3681,6 +3844,7 @@ function saveActivity() {
   save(STORAGE.activities, activities);
   closeModal('modal-activity');
   renderDashboard();
+  if (document.getElementById('panel-container')) renderPanel();
 }
 function deleteActivity() {
   if (!confirm('¿Eliminar esta actividad?')) return;
@@ -3688,6 +3852,7 @@ function deleteActivity() {
   save(STORAGE.activities, activities);
   closeModal('modal-activity');
   renderDashboard();
+  if (document.getElementById('panel-container')) renderPanel();
 }
 
 // ============ COUNTER ============
@@ -4186,8 +4351,76 @@ function toggleDealerGrouping() {
   renderDealers();
 }
 
+function triggerDealerContactsImport(){ if(!requireSharedEdit()) return; const f=document.getElementById('dlr-contacts-file'); if(f) f.click(); }
+function _cleanEmails(str){
+  if(!str) return '';
+  const seen={}, out=[];
+  String(str).split(/[;,]/).forEach(function(e){ e=e.trim(); if(!e) return; const k=e.toLowerCase(); if(seen[k]) return; seen[k]=1; out.push(e); });
+  return out.join(';');
+}
+function importDealerContacts(input){
+  if(!requireSharedEdit()){ input.value=''; return; }
+  const file=input.files&&input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      let nEmail=0,nDir=0,nLoc=0,nZona=0,nName=0; const noMatch=[]; let dealersChanged=false;
+      function casaCentral(code){
+        ensureSalesPoints(code);
+        const prof=dealerProfiles[code];
+        if(!prof||!prof.salesPoints||!prof.salesPoints.length) return null;
+        return prof.salesPoints.find(function(x){return x.id===prof.casaCentralId;})||prof.salesPoints[0];
+      }
+      function processRow(m, isMarina){
+        const code=normDealerCode(m.code);
+        if(!code) return;
+        const d=DEALERS.find(function(x){return normDealerCode(x.code)===code;});
+        if(!d){ if(noMatch.indexOf(code)===-1) noMatch.push(code); return; }
+        const sp=casaCentral(code); if(!sp) return;
+        const prof=dealerProfiles[code];
+        const email=_cleanEmails(m.email);
+        if(email){ sp.ger_email=email; prof.dlr_email=email; nEmail++; }
+        if(isMarina){
+          if(m.direccion){ sp.address=m.direccion; prof.address=m.direccion; nDir++; }
+          const loc=[m.localidad,m.provincia].filter(Boolean).join(', ');
+          if(loc){ sp.city=loc; prof.city=loc; nLoc++; }
+          if(m.comercial){ sp.name=m.comercial; nName++; }
+          if(m.zona && (d.region||'')!==m.zona){ d.region=m.zona; dealersChanged=true; nZona++; }
+        }
+      }
+      function readSheet(name, mapping, isMarina){
+        const ws=wb.Sheets[name]; if(!ws) return;
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+        if(!rows.length) return;
+        const hdr=rows[0].map(function(h){return String(h).trim().toLowerCase();});
+        const idx={};
+        Object.keys(mapping).forEach(function(key){ const names=mapping[key]; for(let i=0;i<names.length;i++){ const j=hdr.indexOf(names[i]); if(j!==-1){ idx[key]=j; break; } } });
+        for(let r=1;r<rows.length;r++){
+          const row=rows[r]; if(!row) continue;
+          const m={};
+          Object.keys(idx).forEach(function(key){ m[key]=String(row[idx[key]]==null?'':row[idx[key]]).trim(); });
+          if(!m.code) continue;
+          processRow(m, isMarina);
+        }
+      }
+      readSheet('Motos', { code:['nro concesionario','nro','codigo','código','code'], email:['mail','email','correo','mails'] }, false);
+      readSheet('Marina', { code:['nro concesionario','nro','codigo','código'], comercial:['nombre comercial'], email:['mail','email','correo'], direccion:['direccion','dirección'], provincia:['provincia'], localidad:['localidad'], zona:['zona'] }, true);
+      saveDealerProfiles();
+      if(dealersChanged) saveDealers();
+      renderDealers();
+      input.value='';
+      let msg='Listo. Mails cargados en Contacto Gerencial: '+nEmail+'.';
+      if(nDir||nLoc||nZona||nName) msg+='\nMarina — direcciones: '+nDir+' · localidad/provincia: '+nLoc+' · zonas: '+nZona+' · nombre comercial: '+nName+'.';
+      if(noMatch.length) msg+='\n\nOJO: '+noMatch.length+' código(s) del Excel no están en el padrón y se omitieron: '+noMatch.slice(0,12).join(', ')+(noMatch.length>12?'…':'');
+      alert(msg);
+    }catch(err){ alert('Error al leer el Excel: '+err.message); input.value=''; }
+  };
+  reader.readAsArrayBuffer(file);
+}
 function renderDealers() {
   { const _b=document.getElementById('dlr-new-btn'); if(_b) _b.style.display = canEditShared()?'':'none'; }
+  { const _ib=document.getElementById('dlr-contacts-import-btn'); if(_ib) _ib.style.display = canEditShared()?'':'none'; }
   // Populate zone filter once
   const zoneFilterEl = document.getElementById('dlr-filter-zone');
   if (zoneFilterEl && zoneFilterEl.options.length <= 1) {
@@ -5552,66 +5785,86 @@ function notifyDealerByMail(recallId, code) {
     alert('Este concesionario no tiene email cargado. Cargá uno en su perfil.');
     return;
   }
-  const units = (r.units || []).filter(u => (u.assignedCode || u.dealerCode) === code);
-  const pending = units.filter(u => !u.serviced);
   const dealerName = (dlr ? dlr.n : code);
   const dealerLine = dealerName.toUpperCase() + ' - ' + code;
-  const subject = ('Campaña de recall ' + (r.name || '') + ' - ' + dealerLine).toUpperCase();
-  let vig = r.start || '-';
-  if (/^\d{4}-\d{2}-\d{2}/.test(vig)) { const pp = vig.slice(0,10).split('-'); vig = pp[2]+'/'+pp[1]+'/'+pp[0]; }
-  const dn = esc(dealerLine), rn = esc(r.name || ''), rm = esc(r.models || '-'), rv = esc(vig);
-  const RED = '#C00000';
+  const subject = 'Seguimiento Recall (' + (r.name || '') + ') - ' + dealerName;
 
-  // Versión con formato (negritas + rojo) para pegar en el correo
   let html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#16181D;line-height:1.55;">';
-  html += 'Estimado <b>' + dn + '</b>,<br><br>';
-  html += 'Les compartimos la información correspondiente a la campaña de recall activa:<br>';
-  html += '<b>Campaña: ' + rn + '</b><br>';
-  html += '<b>Modelo involucrado: ' + rm + '</b><br>';
-  html += '<b>Vigencia: Desde el ' + rv + '</b><br><br>';
-  html += '<b>Adjuntos</b>:';
+  html += 'Buenas tardes, estimados:<br><br>';
+  html += 'Gracias por el compromiso y la predisposición.<br>';
+  html += 'Este mail es el comienzo de un diálogo que llevaremos mes a mes para avanzar con el cumplimiento de la campaña de Recall.<br><br>';
+  html += 'Me gustaría empezar identificando con quién tengo el gusto y con quién llevaré a cabo el seguimiento. La idea es que podamos definir un objetivo de cumplimiento que se relevará mes a mes. Recomiendo que lo analicen contemplando la demanda de trabajo que enfrenta su equipo, para que esta actividad se adapte a sus tiempos y sea un objetivo alcanzable mes a mes.<br><br>';
+  html += '<b>A definir</b>';
   html += '<ul style="margin:6px 0 14px;padding-left:20px;">';
-  html += '<li>Boletín de lanzamiento de la campaña</li>';
-  html += '<li>Listado de unidades asignadas a ustedes.</li>';
-  html += '<li>Instructivo de aplicación de la campaña.</li>';
-  html += '<li>Acta de intervención de campaña de recall.</li>';
+  html += '<li>Identificar el representante del concesionario que llevará la trazabilidad de la campaña.</li>';
+  html += '<li>Definir el objetivo de cumplimiento mensual (cuántas unidades podrán realizar por mes).</li>';
+  html += '<li>Metodología de trabajo.</li>';
   html += '</ul>';
-  html += '<b>Propuesta</b><br>';
-  html += 'El objetivo de este comunicado es darle el conocimiento de las unidades involucradas que le fueron asignadas, y proponer que llevemos esta actividad en conjunto para lograr el cumplimiento de la misma.<br><br>';
-  html += '<b>Les solicito que confirmen la recepción de este mail, para luego definir un objetivo de cumplimiento mensual que sea alcanzable y acorde a la realidad de su concesionario</b>.<br>';
-  html += 'Nuestra estrategia es idear un plan que nos permita cumplir con el objetivo y dar seguimiento al avance de la campaña de forma ordenada y sostenible en el tiempo, la actividad se auditará mes a mes hasta concluir con la campaña.<br><br>';
-  html += '<font color="' + RED + '"><span style="color:' + RED + ';">Aclaro que, hasta que no definamos ese objetivo en conjunto, no se realizará ninguna medición de cumplimiento, la prioridad es acordar una metodología de trabajo que resulte clara y viable para ambas partes. Por lo que no pondremos fechas de cumplimiento en esta primera instancia.</span></font><br><br>';
-  html += 'Buscamos acompañarlos durante el proceso, brindar soporte y seguimiento para alcanzar los resultados esperados a nivel global.<br><br>';
-  html += 'Por favor, confirme la recepción de este correo para iniciar el diálogo y planificar el próximo accionar.<br><br>';
-  html += 'A disposición ante cualquier consulta. Saludos cordiales,';
+  html += 'Si bien en el mail inicial compartí la información general de la campaña a toda la red de Yamaha, este mail es personal entre ustedes y Garantías; la intención es brindarles soporte y acompañamiento hasta que finalicen el 100% de las unidades asignadas. Sobre estas unidades les dejo un adjunto que será nuestra base de trabajo: en el documento van a encontrar todas las unidades asignadas a ustedes que se encuentran alcanzadas por el recall.<br><br>';
+  html += '<b>Propuesta de Metodología</b><br>';
+  html += '<b>Concesionario</b>';
+  html += '<ul style="margin:6px 0 14px;padding-left:20px;">';
+  html += '<li>Identificar las unidades involucradas.</li>';
+  html += '<li>Proyectar y definir el objetivo de cumplimiento del 100% de las unidades (cuántas por mes se realizarían).</li>';
+  html += '<li>Contactar al usuario y ofrecer turno para realizar el servicio.</li>';
+  html += '<li>Abastecerse de los repuestos necesarios según el objetivo definido (consultar sobre los repuestos a Lucas Rios).</li>';
+  html += '<li>Al finalizar un servicio, debe gestionarse la carga en el portal de garantía para el recupero de Mano de obra + Repuestos.</li>';
+  html += '<li>Actualizar la planilla de seguimiento completando los datos solicitados y adjuntarla en este mismo mail durante la primera semana de cada mes.</li>';
+  html += '</ul>';
+  html += '<b>Garantías</b>';
+  html += '<ul style="margin:6px 0 14px;padding-left:20px;">';
+  html += '<li>Brindar acompañamiento durante todo el proceso hasta finalizar la campaña.</li>';
+  html += '<li>Daremos seguimiento mes a mes para medir el progreso del cumplimiento de las unidades.</li>';
+  html += '<li>Analizar el desempeño del concesionario y buscar la mejora continua en los procesos involucrados.</li>';
+  html += '<li>Devolución de la planilla de seguimiento con datos actualizados en caso de requerir.</li>';
+  html += '</ul>';
+  html += 'Estimados, esta es nuestra propuesta de trabajo en conjunto para que alcancemos el 100% del cumplimiento de esta campaña como nos demanda casa matriz. Recuerden que esta actividad es una obligación por parte de cada representante de la marca; entendemos el trabajo que esto involucra, por lo que les presentamos esta propuesta para trabajar en conjunto y suplir esta urgencia con eficiencia. Si están de acuerdo con la misma, por favor confírmenme para asentarlo internamente.<br><br>';
+  html += '<b>Adjunto</b>';
+  html += '<ul style="margin:6px 0 14px;padding-left:20px;">';
+  html += '<li>Listado de unidades (Excel).</li>';
+  html += '<li>Instructivo de seguimiento (PDF).</li>';
+  html += '</ul>';
+  html += 'Ante cualquier consulta estoy a disposición; en caso de requerir, mi WhatsApp se encuentra disponible en la firma del mail.<br><br>';
+  html += 'Gracias por su tiempo, aguardo sus comentarios.<br><br>';
+  html += 'Saludos,';
   html += '</div>';
 
-  // Versión texto plano (para el portapapeles, sin formato)
-  let body = 'Estimado ' + dealerLine + ',\n\n';
-  body += 'Les compartimos la información correspondiente a la campaña de recall activa:\n';
-  body += 'Campaña: ' + (r.name || '') + '\n';
-  body += 'Modelo involucrado: ' + (r.models || '-') + '\n';
-  body += 'Vigencia: Desde el ' + vig + '\n\n';
-  body += 'Adjuntos:\n';
-  body += '• Boletín de lanzamiento de la campaña\n';
-  body += '• Listado de unidades asignadas a ustedes.\n';
-  body += '• Instructivo de aplicación de la campaña.\n';
-  body += '• Acta de intervención de campaña de recall.\n\n';
-  body += 'Propuesta\n';
-  body += 'El objetivo de este comunicado es darle el conocimiento de las unidades involucradas que le fueron asignadas, y proponer que llevemos esta actividad en conjunto para lograr el cumplimiento de la misma.\n\n';
-  body += 'Les solicito que confirmen la recepción de este mail, para luego definir un objetivo de cumplimiento mensual que sea alcanzable y acorde a la realidad de su concesionario.\n';
-  body += 'Nuestra estrategia es idear un plan que nos permita cumplir con el objetivo y dar seguimiento al avance de la campaña de forma ordenada y sostenible en el tiempo, la actividad se auditará mes a mes hasta concluir con la campaña.\n\n';
-  body += 'Aclaro que, hasta que no definamos ese objetivo en conjunto, no se realizará ninguna medición de cumplimiento, la prioridad es acordar una metodología de trabajo que resulte clara y viable para ambas partes. Por lo que no pondremos fechas de cumplimiento en esta primera instancia.\n\n';
-  body += 'Buscamos acompañarlos durante el proceso, brindar soporte y seguimiento para alcanzar los resultados esperados a nivel global.\n\n';
-  body += 'Por favor, confirme la recepción de este correo para iniciar el diálogo y planificar el próximo accionar.\n\n';
-  body += 'A disposición ante cualquier consulta. Saludos cordiales,';
+  let body = 'Buenas tardes, estimados:\n\n';
+  body += 'Gracias por el compromiso y la predisposición.\n';
+  body += 'Este mail es el comienzo de un diálogo que llevaremos mes a mes para avanzar con el cumplimiento de la campaña de Recall.\n\n';
+  body += 'Me gustaría empezar identificando con quién tengo el gusto y con quién llevaré a cabo el seguimiento. La idea es que podamos definir un objetivo de cumplimiento que se relevará mes a mes. Recomiendo que lo analicen contemplando la demanda de trabajo que enfrenta su equipo, para que esta actividad se adapte a sus tiempos y sea alcanzable mes a mes.\n\n';
+  body += 'A definir\n';
+  body += '• Identificar el representante del concesionario que llevará la trazabilidad de la campaña.\n';
+  body += '• Definir el objetivo de cumplimiento mensual (cuántas unidades podrán realizar por mes).\n';
+  body += '• Metodología de trabajo.\n\n';
+  body += 'Si bien en el mail inicial compartí la información general de la campaña a toda la red de Yamaha, este mail es personal entre ustedes y Garantías; la intención es brindarles soporte y acompañamiento hasta que finalicen el 100% de las unidades asignadas. Sobre estas unidades les dejo un adjunto que será nuestra base de trabajo: van a encontrar todas las unidades asignadas a ustedes alcanzadas por el recall.\n\n';
+  body += 'Propuesta de Metodología\n';
+  body += 'Concesionario\n';
+  body += '• Identificar las unidades involucradas.\n';
+  body += '• Proyectar y definir el objetivo de cumplimiento del 100% de las unidades (cuántas por mes se realizarían).\n';
+  body += '• Contactar al usuario y ofrecer turno para realizar el servicio.\n';
+  body += '• Abastecerse de los repuestos necesarios según el objetivo definido (consultar sobre los repuestos a Lucas Rios).\n';
+  body += '• Al finalizar un servicio, gestionar la carga en el portal de garantía para el recupero de Mano de obra + Repuestos.\n';
+  body += '• Actualizar la planilla de seguimiento y adjuntarla en este mismo mail durante la primera semana de cada mes.\n\n';
+  body += 'Garantías\n';
+  body += '• Brindar acompañamiento durante todo el proceso hasta finalizar la campaña.\n';
+  body += '• Seguimiento mes a mes para medir el progreso del cumplimiento de las unidades.\n';
+  body += '• Analizar el desempeño del concesionario y buscar la mejora continua en los procesos involucrados.\n';
+  body += '• Devolución de la planilla de seguimiento con datos actualizados en caso de requerir.\n\n';
+  body += 'Estimados, esta es nuestra propuesta de trabajo en conjunto para alcanzar el 100% del cumplimiento de esta campaña como nos demanda casa matriz. Recuerden que esta actividad es una obligación de cada representante de la marca. Si están de acuerdo, por favor confírmenme para asentarlo internamente.\n\n';
+  body += 'Adjunto\n';
+  body += '• Listado de unidades (Excel).\n';
+  body += '• Instructivo de seguimiento (PDF).\n\n';
+  body += 'Ante cualquier consulta estoy a disposición; mi WhatsApp se encuentra en la firma del mail.\n\n';
+  body += 'Gracias por su tiempo, aguardo sus comentarios.\n\nSaludos,';
 
   const firstEmail = p.dlr_email.split(/[;,]/)[0].trim();
-  const mailto = 'mailto:' + encodeURIComponent(firstEmail) + '?subject=' + encodeURIComponent(subject); // cuerpo vacío: el texto va por portapapeles
+  const mailto = 'mailto:' + encodeURIComponent(firstEmail) + '?subject=' + encodeURIComponent(subject);
   function _finishNotify(copied){
+    try { exportRecallDealerUnits(recallId, code); } catch(e){}
     alert(copied
-      ? 'Copiamos el correo con formato (negritas y rojo) al portapapeles. Se abre el mail con el destinatario y el asunto: pegá con Ctrl+V (o Cmd+V) en el cuerpo.'
-      : 'Se abrió el correo con el destinatario y el asunto. (Tu navegador no permitió copiar el texto con formato; copialo desde el detalle de la campaña.)');
+      ? 'Copiamos el correo al portapapeles y descargamos el Excel de unidades de este concesionario. En el mail que se abre, pegá con Ctrl+V (o Cmd+V) y adjuntá el Excel descargado (y el instructivo PDF).'
+      : 'Se abrió el correo y se descargó el Excel de unidades. (Tu navegador no permitió copiar el texto con formato.)');
     window.location.href = mailto;
     if (!(r.notifications||{})[code]) { setRecallNotification(recallId, code, new Date().toISOString().slice(0,10)); }
   }
@@ -5621,6 +5874,64 @@ function notifyDealerByMail(recallId, code) {
       navigator.clipboard.write([item]).then(function(){ _finishNotify(true); }, function(){ _finishNotify(false); });
     } else { _finishNotify(false); }
   } catch(e){ _finishNotify(false); }
+}
+
+function recallNetworkComm(recallId) {
+  if (!requireSharedEdit()) return;
+  const r = recalls.find(x => x.id === recallId);
+  if (!r) return;
+  const codes = {};
+  (r.units || []).forEach(u => { const cc = u.assignedCode || u.dealerCode; if (cc) codes[cc] = 1; });
+  const emails = [];
+  Object.keys(codes).forEach(cc => { const pp = dealerProfiles[cc] || {}; if (pp.dlr_email) pp.dlr_email.split(/[;,]/).forEach(e => { e = e.trim(); if (e && emails.indexOf(e) === -1) emails.push(e); }); });
+  if (!emails.length) { alert('Ningún concesionario asignado a esta campaña tiene email cargado.'); return; }
+  let vig = r.start || '-';
+  if (/^\d{4}-\d{2}-\d{2}/.test(vig)) { const ps = vig.slice(0,10).split('-'); vig = ps[2]+'/'+ps[1]+'/'+ps[0]; }
+  const rn = esc(r.name || ''), rm = esc(r.models || '-'), rv = esc(vig);
+  const RED = '#C00000';
+  const subject = 'Acompañamiento Recall (' + (r.name || '') + ')';
+
+  let html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#16181D;line-height:1.55;">';
+  html += 'Estimados,<br><br>';
+  html += 'Nos ponemos en contacto con el fin de compartirles información sobre la campaña de recall activa en mención.<br><br>';
+  html += '<b>Detalles</b><br>Campaña: ' + rn + '<br>Modelo involucrado: ' + rm + '<br>Puesta en vigencia: ' + rv + '<br><br>';
+  html += '<b>Archivos adjuntos:</b>';
+  html += '<ul style="margin:6px 0 14px;padding-left:20px;"><li>Boletín de lanzamiento de la campaña.</li><li>Instructivo de realización.</li><li>Listado de unidades asignadas a su concesionario.</li><li>Acta de intervención de campaña de recall.</li></ul>';
+  html += '<b>Propuesta</b><br>El propósito de esta comunicación es identificar las unidades involucradas que han sido asignadas a su concesionario y proponer un trabajo conjunto para lograr el cumplimiento de la campaña de manera eficiente y sostenida.<br><br>';
+  html += 'Les solicitamos confirmar la recepción de este correo. De esta manera damos inicio a un diálogo para definir un objetivo mensual de cumplimiento que sea alcanzable y se adapte a la realidad operativa de su concesionario.<br><br>';
+  html += '<b>Objetivo</b>';
+  html += '<ul style="margin:6px 0 14px;padding-left:20px;"><li>Definir un plan de acción que permita avanzar con el cumplimiento de las campañas activas.</li><li>Realizar seguimiento periódico del progreso de la campaña.</li><li>Auditar mensualmente el proceso hasta la finalización de la campaña.</li></ul>';
+  html += '<font color="' + RED + '"><span style="color:' + RED + ';">Aclaro que, hasta tanto no se acuerde el objetivo de cumplimiento y la metodología de trabajo, no realizaremos ninguna medición de desempeño. En esta primera etapa, la prioridad es establecer un esquema de trabajo claro, realista y beneficioso para ambas partes.</span></font><br><br>';
+  html += 'Desde Yamaha estaremos acompañándolos durante todo el proceso.<br><br>';
+  html += 'Agradeceremos su confirmación de recepción para iniciar el diálogo y coordinar los próximos pasos.<br><br>';
+  html += 'Quedamos a disposición ante cualquier consulta.<br><br>Saludos cordiales,';
+  html += '</div>';
+
+  let body = 'Estimados,\n\n';
+  body += 'Nos ponemos en contacto con el fin de compartirles información sobre la campaña de recall activa en mención.\n\n';
+  body += 'Detalles\nCampaña: ' + (r.name || '') + '\nModelo involucrado: ' + (r.models || '-') + '\nPuesta en vigencia: ' + vig + '\n\n';
+  body += 'Archivos adjuntos:\n• Boletín de lanzamiento de la campaña.\n• Instructivo de realización.\n• Listado de unidades asignadas a su concesionario.\n• Acta de intervención de campaña de recall.\n\n';
+  body += 'Propuesta\nEl propósito de esta comunicación es identificar las unidades involucradas que han sido asignadas a su concesionario y proponer un trabajo conjunto para lograr el cumplimiento de la campaña de manera eficiente y sostenida.\n\n';
+  body += 'Les solicitamos confirmar la recepción de este correo. De esta manera damos inicio a un diálogo para definir un objetivo mensual de cumplimiento que sea alcanzable y se adapte a la realidad operativa de su concesionario.\n\n';
+  body += 'Objetivo\n• Definir un plan de acción que permita avanzar con el cumplimiento de las campañas activas.\n• Realizar seguimiento periódico del progreso de la campaña.\n• Auditar mensualmente el proceso hasta la finalización de la campaña.\n\n';
+  body += 'Aclaro que, hasta tanto no se acuerde el objetivo de cumplimiento y la metodología de trabajo, no realizaremos ninguna medición de desempeño. En esta primera etapa, la prioridad es establecer un esquema de trabajo claro, realista y beneficioso para ambas partes.\n\n';
+  body += 'Desde Yamaha estaremos acompañándolos durante todo el proceso.\n\n';
+  body += 'Agradeceremos su confirmación de recepción para iniciar el diálogo y coordinar los próximos pasos.\n\n';
+  body += 'Quedamos a disposición ante cualquier consulta.\n\nSaludos cordiales,';
+
+  const mailto = 'mailto:?bcc=' + encodeURIComponent(emails.join(';')) + '&subject=' + encodeURIComponent(subject);
+  function _finishComm(copied){
+    alert(copied
+      ? ('Copiamos el comunicado con formato al portapapeles. Se abre el mail con ' + emails.length + ' concesionarios en CCO (copia oculta): pegá con Ctrl+V (o Cmd+V) en el cuerpo.')
+      : ('Se abrió el mail con ' + emails.length + ' concesionarios en CCO. (Tu navegador no permitió copiar el texto con formato.)'));
+    window.location.href = mailto;
+  }
+  try {
+    if (navigator.clipboard && window.ClipboardItem) {
+      const item = new ClipboardItem({ 'text/html': new Blob([html], {type:'text/html'}), 'text/plain': new Blob([body], {type:'text/plain'}) });
+      navigator.clipboard.write([item]).then(function(){ _finishComm(true); }, function(){ _finishComm(false); });
+    } else { _finishComm(false); }
+  } catch(e){ _finishComm(false); }
 }
 
 
@@ -5995,7 +6306,7 @@ function openRecallDetail(id) {
   c.style.display = 'none';
   det.style.display = 'block';
   const sb = r.status === 'Cerrada' ? 'bdg-done' : r.status === 'En seguimiento' ? 'bdg-prog' : 'bdg-pend';
-  let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><button class="btn btn-ghost btn-sm" onclick="renderRecalls()">← Volver a campañas</button><button class="btn btn-ghost btn-sm" onclick="exportRecallAllDealers(\''+r.id+'\')">↓ Exportar XLS (todos)</button></div>';
+  let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;"><button class="btn btn-ghost btn-sm" onclick="renderRecalls()">← Volver a campañas</button><div style="display:flex;gap:6px;flex-wrap:wrap;">'+(canEditShared()?'<button class="btn btn-ghost btn-sm" onclick="recallNetworkComm(\''+r.id+'\')" title="Comunicado general a todos los concesionarios de la campaña (CCO)">✉ Comunicado a la red</button>':'')+'<button class="btn btn-ghost btn-sm" onclick="exportRecallAllDealers(\''+r.id+'\')">↓ Exportar XLS (todos)</button></div></div>';
   html += '<div class="card" style="margin-bottom:16px;"><div style="display:flex;justify-content:space-between;align-items:flex-start;"><div><div style="font-size:20px;font-weight:700;">'+esc(r.name)+'</div><div style="font-size:13px;color:var(--text-secondary);margin-top:4px;">'+(r.models?'Modelos: '+esc(r.models)+' · ':'')+(r.start?'Desde '+r.start:'')+'</div></div><span class="bdg '+sb+'" style="font-size:13px;padding:5px 12px;">'+esc(r.status)+'</span></div></div>';
   html += '<div class="kpi-grid" style="margin-bottom:16px;">';
   html += '<div class="kpi"><div class="kpi-icon">📋</div><div class="kpi-label">Unidades afectadas</div><div class="kpi-value">'+s.total+'</div></div>';
@@ -6151,6 +6462,449 @@ function saveRecall() {
   else renderRecalls();
 }
 function deleteRecall() { if (!requireSharedEdit()) return; if (!confirm('¿Eliminar campaña?')) return; recalls = recalls.filter(r => r.id !== editingRecallId); save(STORAGE.recalls, recalls); closeModal('modal-recall'); renderRecalls(); }
+
+// ============ EVALUACIÓN DLR ============
+let _evdPeriod = null;
+let _evdOpen = {};
+let _evdKpiOpen = {};
+let _evdSeg = 'Motos';
+let _evdRegion = 'YMARG';
+let _evdFrom = null;
+let _evdTo = null;
+let _evdMonths = null;
+function normDealerCode(v){
+  if (v === null || v === undefined) return '';
+  let s = String(v).trim();
+  if (s === '') return '';
+  if (/^\d+$/.test(s)) return s.padStart(6,'0');
+  return s;
+}
+function normClaimStatus(v){
+  const s = String(v||'').trim().toLowerCase();
+  if (s.indexOf('appr')===0 || s.indexOf('aprob')===0) return 'Aprobado';
+  if (s.indexOf('rej')===0 || s.indexOf('rechaz')===0) return 'Rechazado';
+  if (s.indexOf('open')===0 || s.indexOf('abier')===0 || s.indexOf('pend')===0) return 'Abierto';
+  if (!s) return '';
+  return String(v).charAt(0).toUpperCase() + String(v).slice(1);
+}
+function evdParseDate(v){
+  if (v === '' || v === null || v === undefined) return '';
+  if (v instanceof Date && !isNaN(v)) return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0');
+  if (typeof v === 'number'){ const d = new Date(Math.round((v-25569)*86400*1000)); return isNaN(d)?'':d.toISOString().slice(0,10); }
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (m) return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/); if (m) return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  const d = new Date(s); return isNaN(d)?'':d.toISOString().slice(0,10);
+}
+const EVD_REJECT_CATS = {
+  proceso:  { label:'Proceso', pts:3, color:'#E60012' },
+  criterio: { label:'Error de criterio', pts:2, color:'#D97706' },
+  admin:    { label:'Administrativo', pts:1, color:'#1E40AF' },
+  sin:      { label:'Sin clasificar', pts:0, color:'#6B7280' }
+};
+function evdClassifyReject(detail){
+  const s = String(detail||'').toLowerCase();
+  if (/no corresponde|unidad no reparada|no reparada|pieza no corresponde/.test(s)) return 'proceso';
+  if (/falta inform|falta de inform|evidencia|fotos|mala confecc|faltan datos|no se evidencia|integridad erronea|no observ|rto|mano de obra|contactar a garant/.test(s)) return 'criterio';
+  if (/cantidad cero|cantidad 0|duplicad|fuera de termino|fuera de término|caduc|\baño/.test(s)) return 'admin';
+  return 'sin';
+}
+function evdPeriodLabel(p){
+  if (!p) return '';
+  if (p.slice(-5) === '-ACUM') return 'Acumulado ' + p.slice(0,4);
+  if (/^\d{4}-\d{2}$/.test(p)) { const d = new Date(p+'-01T00:00:00'); const l = d.toLocaleDateString('es-AR',{month:'long',year:'numeric'}); return l.charAt(0).toUpperCase()+l.slice(1); }
+  return p;
+}
+function evdNormalizeStore(){
+  if (!Array.isArray(dlrClaims)) { dlrClaims = []; return; }
+  if (!dlrClaims.length) return;
+  if (dlrClaims[0] && dlrClaims[0].claims !== undefined){
+    const out = [];
+    dlrClaims.forEach(function(s){
+      if (s && Array.isArray(s.claims)){
+        const mo = /^\d{4}-\d{2}$/.test(s.period||'') ? s.period : '';
+        s.claims.forEach(function(c){ out.push({ dno:c.dno, dname:c.dname, type:c.type, status:c.status, detail:c.detail, invoice:c.invoice, date:c.date||'', month:c.month||mo, rcat: c.status==='Rechazado'?evdClassifyReject(c.detail):'' }); });
+      } else if (s && s.dno !== undefined){ out.push(s); }
+    });
+    dlrClaims = out;
+    save(STORAGE.dlrClaims, dlrClaims);
+  }
+}
+function evdAllMonths(){
+  const set = {};
+  (dlrClaims||[]).forEach(function(c){ if (c.month) set[c.month]=1; });
+  return Object.keys(set).sort();
+}
+function evdPeriodOptions(){
+  const months = evdAllMonths();
+  const years = {};
+  months.forEach(function(m){ years[m.slice(0,4)]=1; });
+  const yk = Object.keys(years).sort();
+  if (!yk.length) yk.push(String(new Date().getFullYear()));
+  const opts = [];
+  yk.forEach(function(y){ opts.push(y+'-ACUM'); });
+  months.forEach(function(m){ opts.push(m); });
+  return opts;
+}
+function evdClaimsForPeriod(period){
+  if (!period) return [];
+  if (period.slice(-5)==='-ACUM'){ const y = period.slice(0,4); return (dlrClaims||[]).filter(function(c){ return (c.month||'').slice(0,4)===y; }); }
+  return (dlrClaims||[]).filter(function(c){ return c.month===period; });
+}
+function evdSelectedMonths(){
+  const am = evdAllMonths();
+  if (_evdMonths === null) return am.slice();
+  const sel = _evdMonths.filter(function(m){ return am.indexOf(m)!==-1; }).sort();
+  return sel.length ? sel : am.slice();
+}
+function evdCurrentClaims(){
+  const sel = evdSelectedMonths();
+  const set = {}; sel.forEach(function(m){ set[m]=1; });
+  return (dlrClaims||[]).filter(function(c){ return c.month && set[c.month]; });
+}
+function evdRangeLabel(){
+  const am = evdAllMonths(); const sel = evdSelectedMonths();
+  if (!sel.length) return '—';
+  if (sel.length === am.length) return 'Todos (' + sel.length + ' meses)';
+  if (sel.length === 1) return evdPeriodLabel(sel[0]);
+  return sel.map(function(m){ return evdPeriodLabel(m); }).join(', ');
+}
+function evdToggleMonth(m){
+  const am = evdAllMonths();
+  if (_evdMonths === null) _evdMonths = am.slice();
+  const i = _evdMonths.indexOf(m);
+  if (i === -1) _evdMonths.push(m); else _evdMonths.splice(i,1);
+  if (!_evdMonths.length) _evdMonths = null;
+  renderEvalDlr();
+}
+function evdSelectAllMonths(){ _evdMonths = null; renderEvalDlr(); }
+function setEvdPeriod(v){ _evdPeriod = v; renderEvalDlr(); }
+function toggleEvdDealer(key){ _evdOpen[key] = !_evdOpen[key]; renderEvalDlr(); }
+function toggleEvdKpi(id){ _evdKpiOpen[id] = !_evdKpiOpen[id]; renderEvalDlr(); }
+function triggerDlrImport(){ if (!requireSharedEdit()) return; const f = document.getElementById('evd-file'); if (f) f.click(); }
+function importDlrClaims(input){
+  if (!requireSharedEdit()) { input.value=''; return; }
+  const file = input.files && input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      if (!rows.length) { alert('El archivo está vacío.'); input.value=''; return; }
+      const header = rows[0].map(function(hh){ return String(hh).trim().toLowerCase(); });
+      const findCol = function(names){ for (let i=0;i<names.length;i++){ const k=header.indexOf(names[i]); if (k!==-1) return k; } return -1; };
+      const iNo = findCol(['dealer no.','dealer no','dealer number','nro','nro.','codigo','código','code']);
+      const iName = findCol(['dealer name','nombre','concesionario','name']);
+      const iType = findCol(['claim type','tipo','tipo de reclamo','type']);
+      const iStatus = findCol(['claim status','status','estado']);
+      const iDate = findCol(['approval date','fecha','date','fecha del reclamo','fecha reclamo','fecha de aprobacion','fecha de aprobación']);
+      const iDetail = findCol(['unificado','detalle','descripcion','descripción','motivo','observacion','observación']);
+      const iInv = findCol(['factura','invoice','nro factura','n° factura','comprobante']);
+      const incoming = [];
+      const monthsInFile = {};
+      let sinFecha = 0;
+      for (let r=1;r<rows.length;r++){
+        const row = rows[r]; if (!row) continue;
+        const allEmpty = row.every(function(cc){ return String(cc).trim()===''; });
+        if (allEmpty) continue;
+        const dno = normDealerCode(iNo>=0 ? row[iNo] : '');
+        const dname = iName>=0 ? String(row[iName]).trim() : '';
+        if (!dno && !dname) continue;
+        const date = iDate>=0 ? evdParseDate(row[iDate]) : '';
+        const month = date ? date.slice(0,7) : '';
+        if (month) monthsInFile[month]=1; else sinFecha++;
+        const status = normClaimStatus(iStatus>=0 ? row[iStatus] : '');
+        const detail = iDetail>=0 ? String(row[iDetail]).trim() : '';
+        incoming.push({ dno:dno, dname:dname, type:(iType>=0?String(row[iType]).trim():''), status:status, date:date, month:month, detail:detail, invoice:(iInv>=0?String(row[iInv]).trim():''), rcat: status==='Rechazado'?evdClassifyReject(detail):'' });
+      }
+      if (!incoming.length){ alert('No encontré reclamos. Verificá los encabezados: Dealer No., Dealer Name, Claim Type, Claim Status, Approval Date, Unificado, Factura.'); input.value=''; return; }
+      const mk = Object.keys(monthsInFile);
+      dlrClaims = (dlrClaims||[]).filter(function(c){ return c.month && mk.indexOf(c.month)===-1; });
+      dlrClaims = dlrClaims.concat(incoming);
+      save(STORAGE.dlrClaims, dlrClaims);
+      input.value='';
+      _evdFrom = null; _evdTo = null; _evdMonths = null;
+      renderEvalDlr();
+      let msg = 'Importados '+incoming.length+' reclamos. Meses actualizados: '+(mk.length?mk.sort().join(', '):'(sin fecha)')+'.';
+      if (sinFecha) msg += '\n\nOJO: '+sinFecha+' reclamos sin fecha válida quedaron sin mes asignado.';
+      alert(msg);
+    } catch(err){ alert('Error al leer el Excel: '+err.message); input.value=''; }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function evdIsOverdue(c, now){
+  if (c.status!=='Aprobado' || c.invoice || !c.date) return false;
+  const d = new Date(c.date+'T00:00:00');
+  if (isNaN(d)) return false;
+  const deadline = new Date(d.getFullYear(), d.getMonth()+3, d.getDate());
+  return now > deadline;
+}
+function evdAggregate(claims){
+  const now = new Date();
+  const map = {};
+  (claims||[]).forEach(function(c){
+    const key = c.dno || c.dname;
+    if (!map[key]) map[key] = { key:key, dno:c.dno, dname:c.dname, total:0, aprob:0, rech:0, abierto:0, fact:0, aprobSinFact:0, aprobGracia:0, aprobVencido:0, byType:{}, rcat:{proceso:0,criterio:0,admin:0,sin:0}, penal:0, claims:[] };
+    const g = map[key];
+    if (!g.dname && c.dname) g.dname = c.dname;
+    g.total++; g.claims.push(c);
+    g.byType[c.type||'—'] = (g.byType[c.type||'—']||0)+1;
+    if (c.status==='Aprobado'){ g.aprob++; if (c.invoice) g.fact++; else { g.aprobSinFact++; if (evdIsOverdue(c, now)) g.aprobVencido++; else g.aprobGracia++; } }
+    else if (c.status==='Rechazado'){ g.rech++; const cat=c.rcat||evdClassifyReject(c.detail); g.rcat[cat]=(g.rcat[cat]||0)+1; g.penal += (EVD_REJECT_CATS[cat]?EVD_REJECT_CATS[cat].pts:0); }
+    else { g.abierto++; }
+  });
+  return Object.keys(map).map(function(k){ return map[k]; });
+}
+function evdColor(pct){ return pct>=80 ? '#047857' : pct>=60 ? '#D97706' : '#E60012'; }
+function evdScore(g){
+  const base = g.aprob + g.rech;
+  const pa = base>0 ? Math.round(g.aprob/base*100) : null;
+  const sevDen = g.rech - (g.rcat.sin||0);
+  let subSev = g.rech===0 ? 100 : (sevDen>0 ? Math.round((3 - (g.penal/sevDen))/2*100) : 100);
+  subSev = Math.max(0, Math.min(100, subSev));
+  const pf = g.aprob>0 ? Math.round((g.aprob - g.aprobVencido)/g.aprob*100) : null;
+  const parts = [];
+  if (pa!==null) parts.push([0.5, pa]);
+  parts.push([0.3, subSev]);
+  if (pf!==null) parts.push([0.2, pf]);
+  const wsum = parts.reduce(function(a,p){return a+p[0];},0);
+  const score = wsum>0 ? Math.round(parts.reduce(function(a,p){return a+p[0]*p[1];},0)/wsum) : 0;
+  const label = score>=75 ? 'Bueno' : score>=50 ? 'Mejorable' : 'Malo';
+  const color = score>=75 ? '#047857' : score>=50 ? '#D97706' : '#E60012';
+  return { score:score, label:label, color:color, pa:pa, subSev:subSev, pf:pf };
+}
+function evdSegMatch(d, seg){
+  const s = String(d.seg||'').toUpperCase();
+  if (seg==='Motos') return s.indexOf('MTS')!==-1;
+  if (seg==='Marina') return s.indexOf('MR')!==-1;
+  return false;
+}
+function evdCalifMapForPeriod(){
+  const claims = evdCurrentClaims();
+  const groups = evdAggregate(claims);
+  const map = {};
+  groups.forEach(function(g){ if (g.dno){ const sc = evdScore(g); map[g.dno] = sc.label==='Bueno'?2:(sc.label==='Mejorable'?1:0); } });
+  return map;
+}
+function evdScoreMapForMonth(month){
+  const cl = (dlrClaims||[]).filter(function(c){ return c.month===month; });
+  const groups = evdAggregate(cl);
+  const map = {};
+  groups.forEach(function(g){ if (g.dno) map[g.dno] = evdScore(g).score; });
+  return map;
+}
+function evdExportResultados(){
+  const califMap = evdCalifMapForPeriod();
+  const wb = XLSX.utils.book_new();
+  ['Motos','Marina'].forEach(function(seg){
+    const list = (DEALERS||[]).filter(function(d){ return d.code && evdSegMatch(d, seg); });
+    list.sort(function(a,b){ return (b.priority?1:0)-(a.priority?1:0) || String(a.n).localeCompare(String(b.n)); });
+    const aoa = [['NOMBRE CONCESIONARIO','Nro Dlr','Prioritarios','Reclamos (41)','Recall (42)','Guarda (43)','Responsable (44)']];
+    list.forEach(function(d){
+      const code = normDealerCode(d.code);
+      aoa.push([d.n, code, d.priority?'SI':'NO', (califMap[code]!==undefined?califMap[code]:''), '', '', '']);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [{wch:40},{wch:10},{wch:11},{wch:12},{wch:11},{wch:11},{wch:14}];
+    XLSX.utils.book_append_sheet(wb, ws, seg);
+  });
+  const fname = sanitizeFileName('Analisis de desempeño - Garantías - ' + evdRangeLabel()) + '.xlsx';
+  XLSX.writeFile(wb, fname);
+}
+function evdEnviarResultados(){
+  evdExportResultados();
+  const mes = evdRangeLabel();
+  const subject = 'Analisis de desempeño - Garantías - ' + _evdSeg + ' - ' + _evdRegion;
+  let body = 'Buenos días,\n\n';
+  body += 'Adjuntamos el análisis de desempeño de la red sobre el mes de ' + mes + '.\n\n';
+  body += 'Ante cualquier consulta a disposición.\n\n';
+  body += 'Saludos,';
+  alert('Descargamos el Excel de resultados. En el correo que se abre, adjuntá ese archivo antes de enviarlo.');
+  window.location.href = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+}
+function evdBar(label, pct){
+  const col = evdColor(pct);
+  return '<div style="margin-bottom:7px;"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;"><span style="color:var(--text-muted);">'+esc(label)+'</span><b style="color:'+col+';">'+pct+'%</b></div><div class="progress"><div class="progress-bar" style="width:'+pct+'%;background:'+col+';"></div></div></div>';
+}
+function evdChip(txt, bg, col){ return '<span style="font-size:10.5px;font-weight:600;color:'+col+';background:'+bg+';padding:3px 9px;border-radius:10px;">'+esc(txt)+'</span>'; }
+function evdKpiCard(id, label, value, color){
+  const open = !!_evdKpiOpen[id];
+  return '<div onclick="toggleEvdKpi(\''+id+'\')" style="cursor:pointer;flex:1;min-width:150px;border:1px solid '+(open?color:'var(--border)')+';border-radius:10px;padding:11px 13px;background:#fff;">'
+    + '<div style="font-size:21px;font-weight:800;color:'+color+';">'+value+'</div>'
+    + '<div style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;gap:6px;">'+esc(label)+'<span>'+(open?'▾':'▸')+'</span></div></div>';
+}
+function renderEvalDlr(){
+  const c = document.getElementById('evaldlr-container'); if (!c) return;
+  evdNormalizeStore();
+  const importBtn = document.getElementById('evd-import-btn');
+  if (importBtn) importBtn.style.display = canEditShared() ? '' : 'none';
+  const months = evdAllMonths();
+  const selSet = {}; evdSelectedMonths().forEach(function(m){ selSet[m]=1; });
+  let h = '';
+  h += '<div class="card" style="margin-bottom:16px;padding:12px 14px;">';
+  h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
+  h += '<label style="font-size:12px;color:var(--text-secondary);font-weight:600;">Meses a analizar:</label>';
+  if (!months.length){
+    h += '<span style="font-size:11px;color:var(--text-muted);">sin datos importados</span>';
+  } else {
+    const allSel = (_evdMonths===null);
+    h += '<button onclick="evdSelectAllMonths()" style="cursor:pointer;font-size:11px;font-weight:700;padding:5px 11px;border-radius:14px;border:1px solid '+(allSel?'#16181D':'var(--border)')+';background:'+(allSel?'#16181D':'#fff')+';color:'+(allSel?'#fff':'var(--text-secondary)')+';">Todos</button>';
+    months.forEach(function(m){
+      const on = !!selSet[m];
+      h += '<button onclick="evdToggleMonth(\''+m+'\')" style="cursor:pointer;font-size:11px;font-weight:600;padding:5px 11px;border-radius:14px;border:1px solid '+(on&&!allSel?'#E60012':'var(--border)')+';background:'+(on&&!allSel?'#E60012':'#fff')+';color:'+(on&&!allSel?'#fff':'var(--text-secondary)')+';">'+esc(evdPeriodLabel(m))+'</button>';
+    });
+  }
+  h += '</div>';
+  const claims = evdCurrentClaims();
+  h += '<div style="font-size:11px;color:var(--text-muted);margin-top:9px;">'+claims.length+' reclamos · '+esc(evdRangeLabel())+'</div>';
+  h += '</div>';
+
+  h += '<div class="card" style="margin-bottom:16px;padding:12px 14px;display:flex;gap:9px;align-items:center;flex-wrap:wrap;">';
+  h += '<span style="font-size:12px;font-weight:700;color:var(--text-secondary);">Devolución mensual:</span>';
+  h += '<select onchange="_evdSeg=this.value" style="font-size:12px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;"><option value="Motos"'+(_evdSeg==='Motos'?' selected':'')+'>Motos</option><option value="Marina"'+(_evdSeg==='Marina'?' selected':'')+'>Marina</option></select>';
+  h += '<select onchange="_evdRegion=this.value" style="font-size:12px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;"><option value="YMARG"'+(_evdRegion==='YMARG'?' selected':'')+'>YMARG</option><option value="YMUY"'+(_evdRegion==='YMUY'?' selected':'')+'>YMUY</option></select>';
+  h += '<button class="btn btn-ghost btn-sm" onclick="evdExportResultados()">↓ Exportar resultados</button>';
+  h += '<button class="btn btn-primary btn-sm" onclick="evdEnviarResultados()">✉ Enviar resultados</button>';
+  h += '<span style="font-size:10.5px;color:var(--text-muted);width:100%;">El Excel sale con las hojas Motos y Marina y la columna Reclamos (41) cargada con 2/1/0 (2 bien · 1 regular · 0 mal). El asunto del mail usa Segmento + Región.</span>';
+  h += '</div>';
+
+  if (!claims.length){
+    h += '<div class="card" style="text-align:center;padding:30px 16px;color:var(--text-muted);font-size:13px;">';
+    h += 'No hay reclamos para <b>'+esc(evdRangeLabel())+'</b>.';
+    if (canEditShared()) h += '<br>Usá <b>"↑ Importar Excel de reclamos"</b> arriba a la derecha. Cada archivo actualiza los meses que contenga.';
+    h += '</div>';
+    c.innerHTML = h; return;
+  }
+
+  const groups = evdAggregate(claims);
+  const tot = claims.length;
+  const totAprob = groups.reduce(function(a,g){return a+g.aprob;},0);
+  const totRech = groups.reduce(function(a,g){return a+g.rech;},0);
+  const totFact = groups.reduce(function(a,g){return a+g.fact;},0);
+  const totSinFact = groups.reduce(function(a,g){return a+g.aprobSinFact;},0);
+  const pctAprobGlobal = tot ? Math.round(totAprob/tot*100) : 0;
+  const pctFactGlobal = totAprob ? Math.round(totFact/totAprob*100) : 0;
+
+  h += '<div class="card" style="margin-bottom:16px;"><div class="card-h"><div class="card-title">📊 Resumen del período</div></div>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+  h += monthlyKpiBox('Reclamos', tot, '#374151');
+  h += monthlyKpiBox('Aprobados', totAprob, '#047857');
+  h += monthlyKpiBox('Rechazados', totRech, '#E60012');
+  h += monthlyKpiBox('Facturados', totFact, '#1E40AF');
+  h += monthlyKpiBox('Aprob. sin facturar', totSinFact, '#D97706');
+  h += '</div>';
+
+  const claimedCodes = {}; groups.forEach(function(g){ if (g.dno) claimedCodes[g.dno]=1; });
+  const noClaim = (DEALERS||[]).filter(function(d){ return d.code && !claimedCodes[normDealerCode(d.code)]; });
+  const top10 = groups.slice().sort(function(a,b){ return b.total-a.total; }).slice(0,10);
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">';
+  h += evdKpiCard('noclaim', 'Sin reclamos en el período', noClaim.length, '#B45309');
+  h += evdKpiCard('top10', 'Top 10 que más reclaman', Math.min(10, groups.length), '#6D28D9');
+  h += evdKpiCard('cant', 'Concesionarios con reclamos', groups.length, '#1E40AF');
+  h += '</div>';
+  if (_evdKpiOpen.noclaim){
+    h += '<div style="border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-top:9px;max-height:280px;overflow:auto;">';
+    h += '<div style="font-size:11.5px;font-weight:700;margin-bottom:7px;">Concesionarios sin reclamos ('+noClaim.length+')</div>';
+    noClaim.slice().sort(function(a,b){ return String(a.n).localeCompare(String(b.n)); }).forEach(function(d){
+      h += '<div style="font-size:11.5px;padding:4px 0;border-bottom:1px dashed var(--border);">'+esc(d.n)+' <span style="color:var(--text-muted);">· #'+esc(d.code)+(d.region?' · '+esc(d.region):'')+'</span></div>';
+    });
+    h += '</div>';
+  }
+  if (_evdKpiOpen.top10){
+    h += '<div style="border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-top:9px;">';
+    h += '<div style="font-size:11.5px;font-weight:700;margin-bottom:7px;">Top 10 que más reclaman</div>';
+    top10.forEach(function(g,i){
+      h += '<div style="display:flex;justify-content:space-between;font-size:11.5px;padding:4px 0;border-bottom:1px dashed var(--border);"><span>'+(i+1)+'. '+esc(g.dname||g.dno||'—')+(g.dno?' <span style="color:var(--text-muted);">#'+esc(g.dno)+'</span>':'')+'</span><b>'+g.total+'</b></div>';
+    });
+    h += '</div>';
+  }
+
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:14px;">';
+  h += '<div>'+evdBar('Aprobación global', pctAprobGlobal)+'</div>';
+  h += '<div>'+evdBar('Facturación de aprobados', pctFactGlobal)+'</div>';
+  h += '</div></div>';
+
+  groups.forEach(function(g){ g._pa = g.total ? Math.round(g.aprob/g.total*100) : 0; g._pf = g.aprob ? Math.round((g.aprob - g.aprobVencido)/g.aprob*100) : 0; g._sc = evdScore(g); });
+  groups.sort(function(a,b){ return a._sc.score - b._sc.score || b.total - a.total; });
+
+  let prevMap = null, prevLabel = '';
+  const _selM = evdSelectedMonths();
+  if (_selM.length === 1){
+    const am = evdAllMonths(); const idx = am.indexOf(_selM[0]);
+    if (idx > 0){ prevMap = evdScoreMapForMonth(am[idx-1]); prevLabel = evdPeriodLabel(am[idx-1]); }
+  }
+
+  h += '<div class="card"><div class="card-h"><div class="card-title">🏢 Por concesionario ('+groups.length+')</div></div>';
+  h += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">Ordenados por menor calificación (los que más atención necesitan, primero). Calificación = 50% aprobación + 30% severidad de rechazos + 20% facturación.</div>';
+  groups.forEach(function(g){
+    const key = g.key;
+    const open = !!_evdOpen[key];
+    const keyJs = String(key).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    const col = evdColor(g._pa);
+    h += '<div style="border:1px solid var(--border);border-radius:10px;padding:12px 13px;margin-bottom:10px;">';
+    h += '<div onclick="toggleEvdDealer(\''+keyJs+'\')" style="display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;flex-wrap:wrap;">';
+    h += '<div style="display:flex;align-items:center;gap:9px;min-width:0;">';
+    h += '<span style="width:11px;height:11px;border-radius:50%;background:'+col+';flex-shrink:0;"></span>';
+    h += '<div style="min-width:0;"><div style="font-weight:700;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(g.dname||'—')+'</div><div style="font-size:11px;color:var(--text-muted);">'+(g.dno?'#'+esc(g.dno)+' · ':'')+g.total+' reclamos</div></div>';
+    h += '</div>';
+    h += '<div style="display:flex;gap:14px;align-items:center;flex-shrink:0;">';
+    h += '<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:'+evdColor(g._pa)+';">'+g._pa+'%</div><div style="font-size:9.5px;color:var(--text-muted);text-transform:uppercase;">aprob.</div></div>';
+    h += '<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:'+evdColor(g._pf)+';">'+g._pf+'%</div><div style="font-size:9.5px;color:var(--text-muted);text-transform:uppercase;">factur. 3m</div></div>';
+    let trendHtml = '';
+    if (prevMap && prevMap[g.dno] !== undefined){
+      const dlt = g._sc.score - prevMap[g.dno];
+      trendHtml = dlt>0 ? '<span title="Mejoró '+dlt+' pts vs '+esc(prevLabel)+'" style="color:#047857;font-weight:800;font-size:12px;white-space:nowrap;">▲ '+dlt+'</span>'
+        : (dlt<0 ? '<span title="Bajó '+Math.abs(dlt)+' pts vs '+esc(prevLabel)+'" style="color:#E60012;font-weight:800;font-size:12px;white-space:nowrap;">▼ '+Math.abs(dlt)+'</span>'
+        : '<span title="Sin cambios vs '+esc(prevLabel)+'" style="color:#9AA0A8;font-size:12px;">▬</span>');
+    }
+    if (trendHtml) h += trendHtml;
+    h += '<span style="font-size:10px;font-weight:800;color:#fff;background:'+g._sc.color+';padding:4px 10px;border-radius:11px;white-space:nowrap;">'+g._sc.label+' · '+g._sc.score+'</span>';
+    h += '<span style="font-size:13px;color:var(--text-muted);">'+(open?'▾':'▸')+'</span>';
+    h += '</div></div>';
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;">';
+    h += evdChip('Aprobados '+g.aprob, '#ECFDF5', '#047857');
+    h += evdChip('Rechazados '+g.rech, '#FEF2F2', '#E60012');
+    h += evdChip('Facturados '+g.fact, '#EFF6FF', '#1E40AF');
+    if (g.aprobGracia) h += evdChip('Sin facturar (en plazo) '+g.aprobGracia, '#F3F4F6', '#374151');
+    if (g.aprobVencido) h += evdChip('Vencidos sin facturar '+g.aprobVencido, '#FEF2F2', '#E60012');
+    if (g.abierto) h += evdChip('Abiertos '+g.abierto, '#F3F4F6', '#374151');
+    h += '</div>';
+    if (g.rech){
+      h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;">';
+      h += '<span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Rechazos:</span>';
+      ['proceso','criterio','admin','sin'].forEach(function(k){ if (g.rcat[k]) h += evdChip(EVD_REJECT_CATS[k].label+' '+g.rcat[k]+' ('+EVD_REJECT_CATS[k].pts+'p)', '#F9FAFB', EVD_REJECT_CATS[k].color); });
+      h += '<span style="font-size:10.5px;color:var(--text-muted);">· severidad '+g.penal+' pts</span>';
+      h += '</div>';
+    }
+    const typeStr = Object.keys(g.byType).map(function(t){ return esc(t)+': '+g.byType[t]; }).join(' · ');
+    if (typeStr) h += '<div style="font-size:11px;color:var(--text-muted);margin-top:7px;">'+typeStr+'</div>';
+    h += '<div style="font-size:11px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);">Calificación: <b style="color:'+g._sc.color+';">'+g._sc.label+' ('+g._sc.score+'/100)</b> <span style="color:var(--text-muted);">— Aprobación '+(g._sc.pa===null?'s/d':g._sc.pa+'%')+' · Severidad '+g._sc.subSev+'/100 · Facturación 3m '+(g._sc.pf===null?'s/d':g._sc.pf+'%')+'</span></div>';
+    if (open){
+      h += '<div style="margin-top:11px;border-top:1px solid var(--border);padding-top:6px;">';
+      g.claims.forEach(function(cl){
+        const stCol = cl.status==='Aprobado'?'#047857':cl.status==='Rechazado'?'#E60012':'#6B7280';
+        const stBg = cl.status==='Aprobado'?'#ECFDF5':cl.status==='Rechazado'?'#FEF2F2':'#F3F4F6';
+        let facTxt = '';
+        if (cl.invoice) facTxt = ' · facturado';
+        else if (cl.status==='Aprobado') facTxt = evdIsOverdue(cl, new Date()) ? ' · vencido sin facturar' : ' · sin facturar (en plazo)';
+        const dts = cl.date ? cl.date.split('-').reverse().join('/') : '';
+        h += '<div style="padding:7px 0;border-bottom:1px dashed var(--border);">';
+        h += '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;">';
+        h += '<span style="font-size:11.5px;font-weight:600;">'+esc(cl.type||'—')+(dts?' <span style="font-weight:400;color:var(--text-muted);">· '+esc(dts)+'</span>':'')+'</span>';
+        h += '<span style="font-size:10.5px;font-weight:700;color:'+stCol+';background:'+stBg+';padding:2px 8px;border-radius:10px;">'+esc(cl.status||'—')+facTxt+'</span>';
+        h += '</div>';
+        if (cl.detail){ const cat=(cl.status==='Rechazado')?(EVD_REJECT_CATS[cl.rcat]||EVD_REJECT_CATS.sin):null; h += '<div style="font-size:11.5px;color:var(--text-secondary);margin-top:3px;">'+esc(cl.detail)+(cat?' <span style="color:'+cat.color+';font-weight:600;">['+cat.label+']</span>':'')+'</div>'; }
+        if (cl.invoice) h += '<div style="font-size:10.5px;color:var(--text-muted);margin-top:2px;">Factura: '+esc(cl.invoice)+'</div>';
+        h += '</div>';
+      });
+      h += '</div>';
+    }
+    h += '</div>';
+  });
+  h += '</div>';
+  c.innerHTML = h;
+}
 
 // ============ VISITS ============
 function renderVisits() {
@@ -8495,7 +9249,7 @@ function renderTrainings() {
   const actEl = document.querySelector('#page-capacitaciones .ph-actions');
   if (titleEl) titleEl.textContent = 'Centro de Gestión y Seguimiento de Capacitación';
   if (subEl) subEl.textContent = 'Planificación, asistencia, evaluación y seguimiento de la red';
-  if (actEl) actEl.innerHTML = '<button class="btn btn-ghost" onclick="openObjectiveModal()">+ Objetivo</button><button class="btn btn-primary" onclick="openTrainingModal()">+ Nueva capacitación</button>';
+  if (actEl) actEl.innerHTML = '<button class="btn btn-ghost" onclick="openObjectiveModal()">+ Objetivo</button><button class="btn btn-ghost" onclick="exportTrainings()">↓ Exportar capacitados</button><button class="btn btn-primary" onclick="openTrainingModal()">+ Nueva capacitación</button>';
   
   // Show containers again (might be hidden from detail view)
   const objBox = document.getElementById('objectives-container');
@@ -8956,6 +9710,48 @@ function saveObjective() {
 }
 function deleteObjective() { if (!confirm('¿Eliminar objetivo?')) return; objectives = objectives.filter(o => o.id !== editingObjectiveId); save(STORAGE.objectives, objectives); closeModal('modal-objective'); renderObjectives(); }
 
+function exportTrainings(){
+  if(!trainings || !trainings.length){ alert('No hay capacitaciones cargadas para exportar.'); return; }
+  function fdate(d){ if(!d) return ''; const m=String(d).slice(0,10).match(/^(\d{4})-(\d{2})-(\d{2})/); return m?m[3]+'/'+m[2]+'/'+m[1]:String(d); }
+  function dealerName(t){ return (t.dealerIdx!=null && DEALERS[t.dealerIdx]) ? DEALERS[t.dealerIdx].n : ''; }
+  const rows=[], summary=[];
+  const sorted=trainings.slice().sort(function(a,b){ return String(a.date||'').localeCompare(String(b.date||'')); });
+  sorted.forEach(function(t){
+    const dn=dealerName(t);
+    const parts=t.participants||[];
+    summary.push({'Fecha':fdate(t.date),'Tema':t.topic||'','Tipo':t.type||'','Área':t.area||'','Nivel':t.level||'','Concesionario':dn,'Región':t.audience||'','Modalidad':t.mode||'','Estado':t.status||'','N° participantes':parts.length,'Responsable':t.responsible||'','Objetivo':t.objective||''});
+    if(parts.length){
+      parts.forEach(function(p){
+        rows.push({'Fecha':fdate(t.date),'Tema':t.topic||'','Tipo':t.type||'','Área':t.area||'','Nivel':t.level||'','Concesionario':dn||p.dealer||'','Región':t.audience||'','Modalidad':t.mode||'','Estado':t.status||'','Participante':p.name||'','Rol':p.role||'','Asistencia':(t.participantAttendance&&t.participantAttendance[p.id])||'','Responsable':t.responsible||''});
+      });
+    } else {
+      rows.push({'Fecha':fdate(t.date),'Tema':t.topic||'','Tipo':t.type||'','Área':t.area||'','Nivel':t.level||'','Concesionario':dn,'Región':t.audience||'','Modalidad':t.mode||'','Estado':t.status||'','Participante':'(sin participantes cargados)','Rol':'','Asistencia':'','Responsable':t.responsible||''});
+    }
+  });
+  const people={};
+  sorted.forEach(function(t){
+    (t.participants||[]).forEach(function(p){
+      const key = p.catalogId || ((p.name||'').toLowerCase().trim()+'|'+(p.dealer||'').toLowerCase().trim());
+      if(!key.trim()) return;
+      if(!people[key]) people[key]={name:p.name||'',role:p.role||'',dealer:(dealerName(t)||p.dealer||''),region:t.audience||'',count:0,first:'',last:'',topics:{}};
+      const pe=people[key]; pe.count++;
+      if(p.role && !pe.role) pe.role=p.role;
+      if(!pe.dealer && (dealerName(t)||p.dealer)) pe.dealer=dealerName(t)||p.dealer;
+      if(t.date){ if(!pe.first||t.date<pe.first) pe.first=t.date; if(!pe.last||t.date>pe.last) pe.last=t.date; }
+      if(t.topic) pe.topics[t.topic]=1;
+    });
+  });
+  const personas=Object.keys(people).map(function(k){ const pe=people[k]; return {'Participante':pe.name,'Rol':pe.role,'Concesionario':pe.dealer,'Región':pe.region,'N° capacitaciones':pe.count,'Primera':fdate(pe.first),'Última':fdate(pe.last),'Temas':Object.keys(pe.topics).join(', ')}; }).sort(function(a,b){ return String(a.Participante).localeCompare(String(b.Participante)); });
+  const wb=XLSX.utils.book_new();
+  if(personas.length){ const ws0=XLSX.utils.json_to_sheet(personas); ws0['!cols']=[{wch:28},{wch:20},{wch:30},{wch:9},{wch:16},{wch:12},{wch:12},{wch:40}]; XLSX.utils.book_append_sheet(wb,ws0,'Personas capacitadas'); }
+  const ws1=XLSX.utils.json_to_sheet(rows);
+  ws1['!cols']=[{wch:11},{wch:30},{wch:20},{wch:16},{wch:10},{wch:30},{wch:9},{wch:14},{wch:13},{wch:26},{wch:20},{wch:13},{wch:22}];
+  XLSX.utils.book_append_sheet(wb,ws1,'Capacitados');
+  const ws2=XLSX.utils.json_to_sheet(summary);
+  ws2['!cols']=[{wch:11},{wch:30},{wch:20},{wch:16},{wch:10},{wch:30},{wch:9},{wch:14},{wch:13},{wch:15},{wch:20},{wch:34}];
+  XLSX.utils.book_append_sheet(wb,ws2,'Capacitaciones');
+  XLSX.writeFile(wb,'Capacitados - Seguimiento.xlsx');
+}
 let _pendingTnParticipants = [];
 
 function renderTnParticipantsInModal() {
@@ -9987,8 +10783,19 @@ if (!window.__YNET_CLOUD) { initApp(); }
   const _origRemove = localStorage.removeItem.bind(localStorage);
   const SESSION_KEYS = ['gg_current_user_ze','gg_current_role','gg_remember_ze'];
   function isSharedKey(k){ return k && k.indexOf('gg_') === 0 && SESSION_KEYS.indexOf(k) === -1; }
-  // Interceptar escrituras de la app para subirlas a la nube
-  localStorage.setItem = function(k, v){ _origSet(k, v); if (isSharedKey(k)) cloudUpsert(k, v); };
+  let _quotaWarned = false;
+  function _estLocalKB(){ let n=0; try { for (let i=0;i<localStorage.length;i++){ const kk=localStorage.key(i); const vv=localStorage.getItem(kk)||''; n += (kk?kk.length:0) + vv.length; } } catch(e){} return Math.round(n/1024); }
+  function _ynetQuotaHit(){
+    if (_quotaWarned) return; _quotaWarned = true;
+    setTimeout(function(){ try { alert('El almacenamiento local del navegador está lleno (~' + _estLocalKB() + ' KB).\n\nTus cambios igual se guardan en la nube y siguen visibles en esta sesión, pero conviene liberar espacio para que persistan al recargar. Conviene mover los datos pesados (recalls, imágenes) a almacenamiento externo.'); } catch(e){} }, 150);
+  }
+  // Interceptar escrituras de la app para subirlas a la nube (resiliente a cuota llena)
+  localStorage.setItem = function(k, v){
+    let ok = true;
+    try { _origSet(k, v); } catch(e){ ok = false; _ynetQuotaHit(); }
+    if (isSharedKey(k)) cloudUpsert(k, v); // se sube a la nube aunque el guardado local haya fallado
+    return ok;
+  };
   localStorage.removeItem = function(k){ _origRemove(k); if (isSharedKey(k)) cloudDelete(k); };
   let _q = Promise.resolve();
   const _pending = new Map(); // claves con escritura aún no confirmada en la nube
@@ -10048,7 +10855,7 @@ if (!window.__YNET_CLOUD) { initApp(); }
       const localTs = _meta[row.k];
       if (!localTs || _tsMs(row.updated_at) >= _tsMs(localTs)) {
         // La nube es más nueva (o no hay marca local): aplicar nube
-        _origSet(row.k, row.v);
+        try { _origSet(row.k, row.v); } catch(e){ /* local lleno: la app usa memoria/nube en esta sesión */ }
         _meta[row.k] = row.updated_at || localTs || new Date().toISOString();
       } else {
         // Lo local es más nuevo y no se había subido: conservar local y re-subir
