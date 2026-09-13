@@ -386,12 +386,13 @@ textarea{resize:vertical;min-height:60px;}
       <div class="user-name">Garantías</div>
       <div class="user-role">Admin</div>
     </div>
+    <button onclick="openNotifications()" id="notif-bell" title="Notificaciones" style="position:relative;background:transparent;border:none;color:rgba(255,255,255,0.6);cursor:pointer;font-size:17px;line-height:1;padding:6px 8px;border-radius:6px;flex-shrink:0;" onmouseover="this.style.color='#fff';this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.color='rgba(255,255,255,0.6)';this.style.background='transparent'">🔔<span id="notif-badge" style="display:none;position:absolute;top:0;right:0;min-width:15px;height:15px;padding:0 3px;background:#E4002B;color:#fff;border-radius:8px;font-size:9px;font-weight:700;align-items:center;justify-content:center;line-height:1;">0</span></button>
     <button onclick="confirmLogout()" title="Cerrar sesión" style="background:transparent;border:none;color:rgba(255,255,255,0.55);cursor:pointer;font-size:18px;line-height:1;padding:6px 8px;border-radius:6px;flex-shrink:0;" onmouseover="this.style.color='#fff';this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.color='rgba(255,255,255,0.55)';this.style.background='transparent'">⏻</button>
   </div>
   <div style="padding:12px 16px;text-align:center;">
       <div style="font-size:13px;font-weight:700;color:#fff;letter-spacing:0.08em;">Y-Net</div>
       <div style="font-size:9px;color:rgba(255,255,255,0.5);letter-spacing:0.03em;margin-top:2px;">Warranty Operations Platform</div>
-      <div id="app-version-stamp" style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:3px;">v2026.07.17-h</div>
+      <div id="app-version-stamp" style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:3px;">v2026.07.17-o</div>
     </div>
 </aside>
 
@@ -1220,17 +1221,26 @@ textarea{resize:vertical;min-height:60px;}
 </div>
 
 <!-- PANEL TASK MODAL -->
+<div class="modal-bg" id="modal-notifs">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-h"><div class="modal-title">🔔 Notificaciones</div><button class="modal-close" onclick="closeModal('modal-notifs')">×</button></div>
+    <div id="notif-list" style="max-height:60vh;overflow-y:auto;margin:-4px -4px 0;"></div>
+    <div class="modal-actions"><button class="btn btn-ghost btn-sm" onclick="clearNotifs()" style="margin-right:auto;color:var(--text-muted);">Vaciar</button><button class="btn btn-ghost" onclick="closeModal('modal-notifs')">Cerrar</button></div>
+  </div>
+</div>
 <div class="modal-bg" id="modal-panel-task" style="z-index:300;">
   <div class="modal" style="max-width:560px;">
     <div class="modal-h"><div class="modal-title" id="pt-modal-title">Nueva tarea</div><button class="modal-close" onclick="closeModal('modal-panel-task')">×</button></div>
+    <div id="pt-assignee-note" style="display:none;background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;">Tarea derivada por tu líder. Podés ajustar <b>fecha/hora</b>, <b>estado</b>, dejar un <b>comentario</b> y <b>adjuntar archivos</b>.</div>
     <div class="field"><label>Nombre de la tarea *</label><input type="text" id="pt-name" placeholder="Ej: Revisar reclamos pendientes"></div>
     <div class="field"><label>Descripción</label><textarea id="pt-desc" rows="2" placeholder="Detalle de la tarea..."></textarea></div>
     <div class="field-row">
-      <div class="field"><label>Estado</label><select id="pt-status"><option>Pendiente</option><option>En curso</option><option>Completado</option></select></div>
+      <div class="field"><label>Estado</label><select id="pt-status" onchange="ptToggleConclusion()"><option>Pendiente</option><option>En curso</option><option>Completado</option></select></div>
       <div class="field"><label>Prioridad</label><select id="pt-priority"><option>Urgente</option><option>Alta</option><option selected>Normal</option><option>Baja</option></select></div>
     </div>
     <div class="field"><label>Fecha de cierre</label><input type="date" id="pt-due"></div>
-    <div class="field"><label>Personas involucradas</label>
+    <div class="field" id="pt-conclusion-wrap" style="display:none;"><label>Conclusión / mensaje de cierre</label><textarea id="pt-conclusion" rows="3" placeholder="Al completar: dejá un mensaje o conclusión sobre cómo se resolvió."></textarea></div>
+    <div class="field" id="pt-involved-field"><label>Personas involucradas</label>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px;">
         <select id="pt-collab-select" style="flex:1;min-width:160px;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:6px;"></select>
         <button class="btn btn-ghost btn-sm" type="button" onclick="ptAddCollaborator()">+ Agregar</button>
@@ -1241,7 +1251,7 @@ textarea{resize:vertical;min-height:60px;}
       </div>
       <div id="pt-involved-list"></div>
     </div>
-    <div class="field"><label>Etiquetas</label>
+    <div class="field" id="pt-tags-field"><label>Etiquetas</label>
       <div id="pt-tags-list" style="margin-bottom:6px;"></div>
       <div style="display:flex;gap:6px;align-items:center;">
         <input type="text" id="pt-newtag" placeholder="Crear nueva etiqueta" style="flex:1;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:6px;">
@@ -1288,6 +1298,7 @@ textarea{resize:vertical;min-height:60px;}
     <div style="font-size:12px;font-weight:600;color:var(--primary);margin:14px 0 10px;border-bottom:1px solid var(--border);padding-bottom:6px;">Alta de usuario</div>
     <div class="field-row"><div class="field"><label>Código ZE *</label><input type="text" id="um-ze" placeholder="Ej: ZE12345" style="text-transform:uppercase;"></div><div class="field"><label>PIN *</label><input type="text" id="um-pin" inputmode="numeric" maxlength="8" placeholder="4 dígitos"></div></div>
     <div class="field"><label>Áreas permitidas *</label><div id="um-areas" style="display:flex;flex-direction:column;gap:6px;"></div></div>
+    <div class="field"><label>Módulos visibles para este usuario</label><div id="um-pages" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;"></div><div style="font-size:11px;color:var(--text-muted);margin-top:5px;">Destildá los módulos que este usuario NO debe ver (dentro de lo que permite su área). Todos tildados = acceso completo.</div></div>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:8px;"><input type="checkbox" id="um-active" checked style="width:15px;height:15px;"><span>Usuario activo</span></label>
     <div class="modal-actions"><div style="flex:1;"></div><button class="btn btn-ghost" onclick="closeModal('modal-user')">Cancelar</button><button class="btn btn-primary" onclick="saveUser()">Guardar</button></div>
   </div>
@@ -1625,7 +1636,6 @@ let currentUser = null; // the logged-in user object
 function findUserByZE(ze) {
   return users.find(u => (u.ze||'').toUpperCase() === (ze||'').toUpperCase());
 }
-// Which pages each role can see — EDITABLE por el administrador.
 const DEFAULT_ROLE_PAGES = {
   garantias:      ['dashboard','panel','contador','concesionarios','analisis','recall','evaldlr','viajes','capacitaciones','biblioteca'],
   tecnica:        ['dashboard','panel','contador','concesionarios','viajes','capacitaciones','biblioteca'],
@@ -1635,6 +1645,7 @@ const DEFAULT_ROLE_PAGES = {
   admin:          ['admin-panel','soporte','usuarios','areas','comunicados']
 };
 let ROLE_PAGES = JSON.parse(localStorage.getItem('gg_role_pages_v1') || 'null') || JSON.parse(JSON.stringify(DEFAULT_ROLE_PAGES));
+const PAGE_LABELS = { dashboard:'Dashboard', panel:'Panel de control', contador:'Cuantificador', concesionarios:'Concesionarios', analisis:'Desarrollo de Actividades', recall:'Recall', evaldlr:'Evaluación Dlr', viajes:'Viajes', capacitaciones:'Capacitaciones', biblioteca:'Biblioteca', usuarios:'Usuarios' };
 // El administrador siempre ve todos los módulos de gestión.
 ROLE_PAGES.admin = ['admin-panel','soporte','usuarios','areas','comunicados'];
 function saveRolePages() { localStorage.setItem('gg_role_pages_v1', JSON.stringify(ROLE_PAGES)); }
@@ -1764,6 +1775,9 @@ function reloadRoleScopedState() {
   panelTasks = load(STORAGE.panelTasks);
   panelTags = load(STORAGE.panelTags);
   sharedTasks = load(STORAGE.sharedTasks);
+  _notifs = load(STORAGE.notifs) || [];
+  try { const _firstRun = !_notifs.length; generateNotifs(_firstRun); } catch(e){}
+  try { startLiveSync(); } catch(e){}
   if (!panelTags || panelTags.length === 0) { panelTags = DEFAULT_PANEL_TAGS.slice(); save(STORAGE.panelTags, panelTags); }
   // Re-init defaults if empty (training areas/topics, library categories)
   if (!trainingAreas || trainingAreas.length === 0) { trainingAreas = ['Garantías']; save(STORAGE.trainingAreas, trainingAreas); }
@@ -1773,6 +1787,7 @@ function reloadRoleScopedState() {
   stampLegacyOwnership();
   cleanupSeededInbox();
   migrateTrainingDealerCodes();
+  migrateSharedTaskAcceptance();
   // Cuantificador y tipos de actividad: por usuario
   try { const s = JSON.parse(localStorage.getItem(scopedKey('gg_cnt_types_v1'))||'null'); CNT_TYPES = (s&&Array.isArray(s)&&s.length>0)?s:JSON.parse(JSON.stringify(DEFAULT_CNT_TYPES)); } catch(e){ CNT_TYPES = JSON.parse(JSON.stringify(DEFAULT_CNT_TYPES)); }
   try { if (Array.isArray(CNT_TYPES) && !CNT_TYPES.some(function(x){ return /statement/i.test((x.id||'')+' '+(x.label||'')); })) { CNT_TYPES.push({id:'STATEMENT', label:'Statement', avgMin:25}); saveCntTypes(); } } catch(e){}
@@ -2067,7 +2082,11 @@ function setRole(role) {
 
 function applyRoleVisibility() {
   if (!currentRole) return;
-  const allowed = ROLE_PAGES[currentRole] || [];
+  let allowed = ROLE_PAGES[currentRole] || [];
+  // Restricción por usuario: subconjunto de módulos definido al dar de alta.
+  if (currentUser && Array.isArray(currentUser.pages) && currentUser.pages.length) {
+    allowed = allowed.filter(p => currentUser.pages.indexOf(p) !== -1);
+  }
   document.querySelectorAll('.nav-item').forEach(el => {
     const page = el.dataset.page;
     if (!page) return;
@@ -2174,13 +2193,14 @@ const STORAGE = {
   fixedTasks: 'gg_fixed_tasks_v1',
   panelTasks: 'gg_panel_tasks_v1',
   panelTags: 'gg_panel_tags_v1',
-  sharedTasks: 'gg_shared_tasks_v1'
+  sharedTasks: 'gg_shared_tasks_v1',
+  notifs: 'gg_notifications_v1'
 };
 // Claves cuyos datos son PERSONALES (scope por usuario / ZE). El resto es compartido.
 // Compartidos: Concesionarios, Recall, Capacitaciones y Biblioteca.
 const PER_PROFILE_KEYS = [
   'gg_activities_v1','gg_counter_v1','gg_cases_v1','gg_objectives_v1','gg_fixed_tasks_v1',
-  'gg_panel_tasks_v1','gg_panel_tags_v1','gg_cnt_types_v1','gg_act_types_v1',
+  'gg_panel_tasks_v1','gg_panel_tags_v1','gg_cnt_types_v1','gg_act_types_v1','gg_notifications_v1',
   'gg_trips_v1','gg_trip_visits_v1','gg_trip_expenses_v1','gg_trip_places_v1','gg_trip_participants_v1'
 ];
 function scopedKey(k) {
@@ -2272,6 +2292,9 @@ let fixedTasks = load(STORAGE.fixedTasks);
 let panelTasks = load(STORAGE.panelTasks);
 let panelTags = load(STORAGE.panelTags);
 let sharedTasks = load(STORAGE.sharedTasks);
+let _notifs = load(STORAGE.notifs) || [];
+let _sharedTasksRaw = null;
+let _liveSyncStarted = false;
 function saveSupportChats() { localStorage.setItem('gg_support_chats_v1', JSON.stringify(supportChats)); }
 function saveComunicados() { localStorage.setItem('gg_comunicados_v1', JSON.stringify(comunicados)); }
 function saveTickets() { localStorage.setItem('gg_tickets_v1', JSON.stringify(tickets)); }
@@ -2595,7 +2618,7 @@ function renderCalendar() {
   document.getElementById('cal-selected-info').textContent = acts.length === 0 ? 'Sin actividades' : acts.length+' actividad'+(acts.length>1?'es':'');
 }
 
-const APP_VERSION = 'v2026.07.17-h';
+const APP_VERSION = 'v2026.07.17-o';
 function paintVersionStamp(){ const el = document.getElementById('app-version-stamp'); if (el) el.textContent = APP_VERSION; }
 function openDayEntry(id) {
   // Las entradas del día pueden ser actividades reales o virtuales
@@ -2961,6 +2984,86 @@ function renderPanelActivitiesByMonth(){
   return h;
 }
 
+// ── Notificaciones + sincronización en vivo ──
+function _notifAssigneeName(t){
+  const me = currentUser ? currentUser.ze : '';
+  const p = (t.involved||[]).find(x => x.ze && x.ze !== t.owner);
+  if (!p) return '';
+  const u = findUserByZE(p.ze);
+  return u ? userFullName(u) : p.ze;
+}
+function pushNotif(key, type, text, seen){
+  if (!_notifs) _notifs = [];
+  if (_notifs.some(n => n.key === key)) return false;
+  _notifs.push({ id: Date.now()+''+Math.floor(Math.random()*1000), key: key, type: type, text: text, ts: new Date().toISOString(), seen: !!seen });
+  if (_notifs.length > 100) _notifs = _notifs.slice(-100);
+  save(STORAGE.notifs, _notifs);
+  return true;
+}
+function generateNotifs(markSeen){
+  const ze = currentUser ? currentUser.ze : '';
+  if (!ze) return;
+  (sharedTasks||[]).forEach(function(t){
+    const iAmInvolved = (t.involved||[]).some(p => p.ze === ze);
+    const iOwn = t.owner === ze;
+    if (iAmInvolved && !iOwn) pushNotif('assigned:'+t.id, 'assigned', 'Te derivaron una tarea: ' + (t.name||''), markSeen);
+    if (iOwn && t.status === 'Completado'){ const who = _notifAssigneeName(t); pushNotif('done:'+t.id, 'done', 'Tarea completada' + (who?(' por '+who):'') + ': ' + (t.name||''), markSeen); }
+  });
+  renderNotifBadge();
+}
+function notifUnseenCount(){ return (_notifs||[]).filter(n => !n.seen).length; }
+function renderNotifBadge(){
+  const b = document.getElementById('notif-badge'); if (!b) return;
+  const n = notifUnseenCount();
+  b.textContent = n > 9 ? '9+' : String(n);
+  b.style.display = n > 0 ? 'flex' : 'none';
+}
+function openNotifications(){
+  const box = document.getElementById('notif-list');
+  if (box){
+    const list = (_notifs||[]).slice().sort((a,b)=>(b.ts||'').localeCompare(a.ts||''));
+    if (!list.length){ box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px;">Sin notificaciones.</div>'; }
+    else {
+      box.innerHTML = list.map(function(n){
+        const icon = n.type==='done' ? '✅' : n.type==='assigned' ? '📥' : '🔔';
+        const d = n.ts ? new Date(n.ts) : null;
+        const when = d ? d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : '';
+        return '<div style="display:flex;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);'+(n.seen?'':'background:#EFF6FF;')+'"><span style="font-size:16px;">'+icon+'</span><div style="flex:1;min-width:0;"><div style="font-size:13px;">'+esc(n.text)+'</div><div style="font-size:10.5px;color:var(--text-muted);margin-top:2px;">'+when+'</div></div></div>';
+      }).join('');
+    }
+  }
+  document.getElementById('modal-notifs').classList.add('active');
+  (_notifs||[]).forEach(n => n.seen = true);
+  save(STORAGE.notifs, _notifs);
+  renderNotifBadge();
+}
+function clearNotifs(){ if(!confirm('¿Vaciar todas las notificaciones?')) return; _notifs = []; save(STORAGE.notifs, _notifs); openNotifications(); }
+function ynetPollSync(){
+  if (!window.__sb || !window.__YNET_CLOUD || !currentUser) return;
+  try {
+    window.__sb.from('app_data').select('k,v').eq('k','gg_shared_tasks_v1').then(function(res){
+      if (!res || res.error || !res.data || !res.data.length) return;
+      const v = res.data[0].v;
+      if (v === _sharedTasksRaw) return;
+      _sharedTasksRaw = v;
+      let parsed = null; try { parsed = JSON.parse(v); } catch(e){ return; }
+      if (!Array.isArray(parsed)) return;
+      sharedTasks = parsed;
+      if (window.__ynetApplyRemote) window.__ynetApplyRemote('gg_shared_tasks_v1', v);
+      generateNotifs(false);
+      const pp = document.getElementById('page-panel'); if (pp && pp.classList.contains('active')) renderPanel();
+      const pd = document.getElementById('page-dashboard'); if (pd && pd.classList.contains('active')) renderDashboard();
+    }, function(){});
+  } catch(e){}
+}
+function startLiveSync(){
+  if (_liveSyncStarted) return; _liveSyncStarted = true;
+  _sharedTasksRaw = JSON.stringify(sharedTasks||[]);
+  setInterval(ynetPollSync, 12000);
+  setTimeout(ynetPollSync, 3000);
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') ynetPollSync(); });
+  window.addEventListener('focus', ynetPollSync);
+}
 function renderPanel() {
   const c = document.getElementById('panel-container');
   if (!c) return;
@@ -3010,14 +3113,22 @@ function renderPanel() {
 
   // Tablero
   const tasks = getFilteredPanelTasks();
+  const derivadas = tasks.filter(isDerivedByMe);
+  const mias = tasks.filter(t => !isDerivedByMe(t));
   h += '<div class="card">';
-  h += '<div class="card-h"><div class="card-title">✓ Mis tareas ('+tasks.length+')</div></div>';
-  if (tasks.length === 0) {
+  h += '<div class="card-h"><div class="card-title">✓ Mis tareas ('+mias.length+')</div></div>';
+  if (mias.length === 0) {
     h += '<div style="font-size:12.5px;color:var(--text-muted);padding:14px 4px;text-align:center;">No hay tareas con estos filtros. Creá una con "+ Nueva tarea".</div>';
   } else {
-    tasks.forEach(t => h += renderPanelTaskRow(t));
+    mias.forEach(t => h += renderPanelTaskRow(t));
   }
   h += '</div>';
+  if (derivadas.length) {
+    h += '<div class="card" style="margin-top:16px;">';
+    h += '<div class="card-h"><div><div class="card-title">📤 Derivadas al equipo ('+derivadas.length+')</div><div class="card-sub">Tareas que asignaste — seguimiento y conclusión</div></div></div>';
+    derivadas.forEach(t => h += renderPanelTaskRow(t));
+    h += '</div>';
+  }
 
   c.innerHTML = h;
 }
@@ -3183,7 +3294,9 @@ function renderPanelTaskRow(t) {
   });
   if (t.evidence && t.evidence.length) h += '<span class="bdg" style="background:var(--bg-page);color:var(--text-muted);">📎 '+t.evidence.length+'</span>';
   if (t.inCalendar) h += '<span class="bdg" style="background:#FEF3C7;color:#92400E;">🗓 En calendario</span>';
-  h += '</div></div>';
+  h += '</div>';
+  if (t.conclusion) h += '<div style="margin-top:8px;font-size:11.5px;background:#F0FDF4;border-left:3px solid #047857;padding:6px 9px;border-radius:4px;color:#065F46;"><b>Conclusión:</b> '+esc(t.conclusion)+'</div>';
+  h += '</div>';
   return h;
 }
 
@@ -3191,10 +3304,15 @@ function setPanelTaskStatus(id, st) {
   const t = findPanelTask(id);
   if (!t) return;
   t.status = st;
+  if (st === 'Completado') {
+    const msg = prompt('Conclusión / mensaje de cierre (opcional):', t.conclusion || '');
+    if (msg !== null) t.conclusion = msg.trim();
+  }
   savePanelStores();
   renderPanel();
   if (t.inCalendar) renderDashboard();
 }
+function isDerivedByMe(t){ const me = panelMyZe(); return t.owner === me && (t.involved||[]).some(p => p.ze && p.ze !== me); }
 
 function renderMonthlyKpis(monthStr) { return ''; }
 
@@ -3218,13 +3336,26 @@ function openPanelTaskModal(id) {
   document.getElementById('pt-priority').value = t ? (t.priority||'Normal') : 'Normal';
   document.getElementById('pt-calendar').checked = t ? !!t.inCalendar : false;
   document.getElementById('pt-cal-time').value = t ? (t.calTime||'') : '';
+  document.getElementById('pt-conclusion').value = t ? (t.conclusion||'') : '';
   _ptInvolved = (t && Array.isArray(t.involved)) ? JSON.parse(JSON.stringify(t.involved)) : [];
   _ptTags = (t && Array.isArray(t.tags)) ? t.tags.slice() : [];
   _ptEvidence = (t && Array.isArray(t.evidence)) ? JSON.parse(JSON.stringify(t.evidence)) : [];
   document.getElementById('pt-modal-title').textContent = t ? 'Editar tarea' : 'Nueva tarea';
   ptToggleCalendar();
+  ptToggleConclusion();
   renderPtCollabOptions(); renderPtInvolved(); renderPtTags(); renderPtEvidence();
+  _ptEditIsOwner = !t || (t.owner === panelMyZe());
+  applyPtPermissions();
   document.getElementById('modal-panel-task').classList.add('active');
+}
+let _ptEditIsOwner = true;
+function applyPtPermissions(){
+  const owner = _ptEditIsOwner;
+  ['pt-name','pt-desc','pt-priority'].forEach(function(id){ const el=document.getElementById(id); if(el) el.disabled = !owner; });
+  const inv = document.getElementById('pt-involved-field'); if(inv) inv.style.display = owner ? '' : 'none';
+  const tg = document.getElementById('pt-tags-field'); if(tg) tg.style.display = owner ? '' : 'none';
+  const note = document.getElementById('pt-assignee-note'); if(note) note.style.display = owner ? 'none' : 'block';
+  ptToggleConclusion();
 }
 
 function renderPtCollabOptions() {
@@ -3287,10 +3418,22 @@ function ptToggleCalendar() {
   const on = document.getElementById('pt-calendar').checked;
   document.getElementById('pt-cal-time-wrap').style.display = on ? '' : 'none';
 }
+function ptToggleConclusion() {
+  const done = document.getElementById('pt-status').value === 'Completado';
+  const show = done || !_ptEditIsOwner;
+  document.getElementById('pt-conclusion-wrap').style.display = show ? '' : 'none';
+  const lbl = document.querySelector('#pt-conclusion-wrap label');
+  if (lbl) lbl.textContent = _ptEditIsOwner ? 'Conclusión / mensaje de cierre' : 'Comentario';
+}
 
 function savePanelTask() {
   const name = document.getElementById('pt-name').value.trim();
   if (!name) { alert('El nombre de la tarea es obligatorio.'); return; }
+  if (document.getElementById('pt-calendar').checked && !document.getElementById('pt-due').value) {
+    alert('Para que la tarea aparezca en el calendario, poné una "Fecha de cierre".');
+    document.getElementById('pt-due').focus();
+    return;
+  }
   const id = editingPanelTaskId || ('pt'+Date.now());
   const prev = editingPanelTaskId ? findPanelTask(editingPanelTaskId) : null;
   const obj = {
@@ -3305,6 +3448,7 @@ function savePanelTask() {
     evidence: _ptEvidence.slice(),
     inCalendar: document.getElementById('pt-calendar').checked,
     calTime: document.getElementById('pt-cal-time').value || '',
+    conclusion: document.getElementById('pt-conclusion').value.trim(),
     owner: prev && prev.owner ? prev.owner : (currentUser ? currentUser.ze : ''),
     createdAt: prev && prev.createdAt ? prev.createdAt : new Date().toISOString()
   };
@@ -3316,7 +3460,7 @@ function savePanelTask() {
   if (hasSystem) {
     const prevAcc = (prev && prev.acceptance) ? prev.acceptance : {};
     const acc = {};
-    obj.involved.forEach(p => { if (p.ze && p.ze !== obj.owner) acc[p.ze] = prevAcc[p.ze] || 'pending'; });
+    obj.involved.forEach(p => { if (p.ze && p.ze !== obj.owner) acc[p.ze] = prevAcc[p.ze] || 'accepted'; });
     obj.acceptance = acc;
     sharedTasks.push(obj);
   } else {
@@ -4467,6 +4611,19 @@ function trainingDealerIdx(t) {
 function trainingDealerName(t) {
   const d = trainingDealer(t);
   return d ? d.n : '';
+}
+function migrateSharedTaskAcceptance() {
+  // Modelo de derivación directa: las tareas compartidas que quedaron "pendientes
+  // de aceptar" pasan a "aceptadas" para que aparezcan directo en panel y calendario.
+  let changed = false;
+  (sharedTasks || []).forEach(function(t) {
+    if (t.acceptance) {
+      Object.keys(t.acceptance).forEach(function(ze) {
+        if (t.acceptance[ze] === 'pending') { t.acceptance[ze] = 'accepted'; changed = true; }
+      });
+    }
+  });
+  if (changed) save(STORAGE.sharedTasks, sharedTasks);
 }
 function migrateTrainingDealerCodes() {
   let changed = false;
@@ -10459,10 +10616,30 @@ function openUserModal(ze) {
   Object.keys(ROLES).forEach(k => {
     const r = ROLES[k];
     const checked = u && u.areas && u.areas.indexOf(k) !== -1;
-    h += '<label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:13px;"><input type="checkbox" value="'+k+'" '+(checked?'checked':'')+' style="width:15px;height:15px;"><span style="display:flex;align-items:center;gap:6px;"><span style="width:20px;height:20px;border-radius:50%;background:'+r.color+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">'+r.av+'</span>'+r.label+'</span></label>';
+    h += '<label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:13px;"><input type="checkbox" value="'+k+'" '+(checked?'checked':'')+' onchange="renderUmPages()" style="width:15px;height:15px;"><span style="display:flex;align-items:center;gap:6px;"><span style="width:20px;height:20px;border-radius:50%;background:'+r.color+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">'+r.av+'</span>'+r.label+'</span></label>';
   });
   box.innerHTML = h;
+  _umPages = (u && Array.isArray(u.pages)) ? u.pages.slice() : [];
+  renderUmPages();
   document.getElementById('modal-user').classList.add('active');
+}
+let _umPages = [];
+function umAvailablePages() {
+  const areas = Array.from(document.querySelectorAll('#um-areas input:checked')).map(el => el.value);
+  const seen = {}, out = [];
+  areas.forEach(a => (ROLE_PAGES[a] || []).forEach(p => { if (!seen[p]) { seen[p]=1; out.push(p); } }));
+  return out;
+}
+function renderUmPages() {
+  const box = document.getElementById('um-pages'); if (!box) return;
+  const avail = umAvailablePages();
+  if (!avail.length) { box.innerHTML = '<span style="font-size:11.5px;color:var(--text-muted);">Elegí un área primero.</span>'; return; }
+  // Sin restricción guardada (pages vacío) = todos visibles.
+  const full = !(_umPages && _umPages.length);
+  box.innerHTML = avail.map(function(p){
+    const on = full || _umPages.indexOf(p) !== -1;
+    return '<label style="display:flex;align-items:center;gap:7px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12.5px;"><input type="checkbox" data-page-perm="'+p+'" '+(on?'checked':'')+' style="width:14px;height:14px;">'+esc(PAGE_LABELS[p]||p)+'</label>';
+  }).join('');
 }
 
 let _umTeam = [];
@@ -10523,9 +10700,12 @@ function saveUser() {
   if (!email) { alert('El email es obligatorio: tiene que coincidir con el de la invitación en Supabase, porque es lo que vincula al usuario con su acceso.'); return; }
   const areas = Array.from(document.querySelectorAll('#um-areas input:checked')).map(el => el.value);
   if (areas.length === 0) { alert('Asigná al menos un área'); return; }
+  const availPages = umAvailablePages();
+  const checkedPages = Array.from(document.querySelectorAll('#um-pages input:checked')).map(el => el.getAttribute('data-page-perm'));
+  const pages = (checkedPages.length >= availPages.length) ? [] : checkedPages; // todos = acceso completo
   const hasTeam = document.getElementById('um-has-team').value === 'si';
   const userData = {
-    ze, firstname, lastname, pin, areas,
+    ze, firstname, lastname, pin, areas, pages,
     dept: document.getElementById('um-dept').value.trim(),
     cargo: document.getElementById('um-cargo').value.trim(),
     email: document.getElementById('um-email').value.trim(),
@@ -10925,6 +11105,7 @@ if (!window.__YNET_CLOUD) { initApp(); }
     auth: { storage: sessionStore, persistSession: true, autoRefreshToken: true }
   });
   window.__sb = sb;
+  window.__ynetApplyRemote = function(k, v){ try { _origSet(k, v); } catch(e){} try { _meta[k] = new Date().toISOString(); _saveMeta(); } catch(e){} };
 
   // Token de sesión cacheado (para el guardado de emergencia sincrónico al cerrar)
   let _accessToken = null;
@@ -11005,6 +11186,13 @@ if (!window.__YNET_CLOUD) { initApp(); }
     (data||[]).forEach(row => {
       if (!isSharedKey(row.k)) return;
       cloudKeys[row.k] = true;
+      // Claves colaborativas globales: la nube manda siempre, así una copia local
+      // desactualizada no bloquea las tareas que otro usuario derivó/compartió.
+      if (row.k === 'gg_shared_tasks_v1') {
+        try { _origSet(row.k, row.v); } catch(e){}
+        _meta[row.k] = row.updated_at || new Date().toISOString();
+        return;
+      }
       const localTs = _meta[row.k];
       if (!localTs || _tsMs(row.updated_at) >= _tsMs(localTs)) {
         // La nube es más nueva (o no hay marca local): aplicar nube
