@@ -391,7 +391,7 @@ textarea{resize:vertical;min-height:60px;}
   <div style="padding:12px 16px;text-align:center;">
       <div style="font-size:13px;font-weight:700;color:#fff;letter-spacing:0.08em;">Y-Net</div>
       <div style="font-size:9px;color:rgba(255,255,255,0.5);letter-spacing:0.03em;margin-top:2px;">Warranty Operations Platform</div>
-      <div id="app-version-stamp" style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:3px;">v2026.07.17-h</div>
+      <div id="app-version-stamp" style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:3px;">v2026.07.17-k</div>
     </div>
 </aside>
 
@@ -1226,10 +1226,11 @@ textarea{resize:vertical;min-height:60px;}
     <div class="field"><label>Nombre de la tarea *</label><input type="text" id="pt-name" placeholder="Ej: Revisar reclamos pendientes"></div>
     <div class="field"><label>Descripción</label><textarea id="pt-desc" rows="2" placeholder="Detalle de la tarea..."></textarea></div>
     <div class="field-row">
-      <div class="field"><label>Estado</label><select id="pt-status"><option>Pendiente</option><option>En curso</option><option>Completado</option></select></div>
+      <div class="field"><label>Estado</label><select id="pt-status" onchange="ptToggleConclusion()"><option>Pendiente</option><option>En curso</option><option>Completado</option></select></div>
       <div class="field"><label>Prioridad</label><select id="pt-priority"><option>Urgente</option><option>Alta</option><option selected>Normal</option><option>Baja</option></select></div>
     </div>
     <div class="field"><label>Fecha de cierre</label><input type="date" id="pt-due"></div>
+    <div class="field" id="pt-conclusion-wrap" style="display:none;"><label>Conclusión / mensaje de cierre</label><textarea id="pt-conclusion" rows="3" placeholder="Al completar: dejá un mensaje o conclusión sobre cómo se resolvió."></textarea></div>
     <div class="field"><label>Personas involucradas</label>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px;">
         <select id="pt-collab-select" style="flex:1;min-width:160px;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:6px;"></select>
@@ -1288,6 +1289,7 @@ textarea{resize:vertical;min-height:60px;}
     <div style="font-size:12px;font-weight:600;color:var(--primary);margin:14px 0 10px;border-bottom:1px solid var(--border);padding-bottom:6px;">Alta de usuario</div>
     <div class="field-row"><div class="field"><label>Código ZE *</label><input type="text" id="um-ze" placeholder="Ej: ZE12345" style="text-transform:uppercase;"></div><div class="field"><label>PIN *</label><input type="text" id="um-pin" inputmode="numeric" maxlength="8" placeholder="4 dígitos"></div></div>
     <div class="field"><label>Áreas permitidas *</label><div id="um-areas" style="display:flex;flex-direction:column;gap:6px;"></div></div>
+    <div class="field"><label>Módulos visibles para este usuario</label><div id="um-pages" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;"></div><div style="font-size:11px;color:var(--text-muted);margin-top:5px;">Destildá los módulos que este usuario NO debe ver (dentro de lo que permite su área). Todos tildados = acceso completo.</div></div>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:8px;"><input type="checkbox" id="um-active" checked style="width:15px;height:15px;"><span>Usuario activo</span></label>
     <div class="modal-actions"><div style="flex:1;"></div><button class="btn btn-ghost" onclick="closeModal('modal-user')">Cancelar</button><button class="btn btn-primary" onclick="saveUser()">Guardar</button></div>
   </div>
@@ -1625,7 +1627,6 @@ let currentUser = null; // the logged-in user object
 function findUserByZE(ze) {
   return users.find(u => (u.ze||'').toUpperCase() === (ze||'').toUpperCase());
 }
-// Which pages each role can see — EDITABLE por el administrador.
 const DEFAULT_ROLE_PAGES = {
   garantias:      ['dashboard','panel','contador','concesionarios','analisis','recall','evaldlr','viajes','capacitaciones','biblioteca'],
   tecnica:        ['dashboard','panel','contador','concesionarios','viajes','capacitaciones','biblioteca'],
@@ -1635,6 +1636,7 @@ const DEFAULT_ROLE_PAGES = {
   admin:          ['admin-panel','soporte','usuarios','areas','comunicados']
 };
 let ROLE_PAGES = JSON.parse(localStorage.getItem('gg_role_pages_v1') || 'null') || JSON.parse(JSON.stringify(DEFAULT_ROLE_PAGES));
+const PAGE_LABELS = { dashboard:'Dashboard', panel:'Panel de control', contador:'Cuantificador', concesionarios:'Concesionarios', analisis:'Desarrollo de Actividades', recall:'Recall', evaldlr:'Evaluación Dlr', viajes:'Viajes', capacitaciones:'Capacitaciones', biblioteca:'Biblioteca', usuarios:'Usuarios' };
 // El administrador siempre ve todos los módulos de gestión.
 ROLE_PAGES.admin = ['admin-panel','soporte','usuarios','areas','comunicados'];
 function saveRolePages() { localStorage.setItem('gg_role_pages_v1', JSON.stringify(ROLE_PAGES)); }
@@ -1773,6 +1775,7 @@ function reloadRoleScopedState() {
   stampLegacyOwnership();
   cleanupSeededInbox();
   migrateTrainingDealerCodes();
+  migrateSharedTaskAcceptance();
   // Cuantificador y tipos de actividad: por usuario
   try { const s = JSON.parse(localStorage.getItem(scopedKey('gg_cnt_types_v1'))||'null'); CNT_TYPES = (s&&Array.isArray(s)&&s.length>0)?s:JSON.parse(JSON.stringify(DEFAULT_CNT_TYPES)); } catch(e){ CNT_TYPES = JSON.parse(JSON.stringify(DEFAULT_CNT_TYPES)); }
   try { if (Array.isArray(CNT_TYPES) && !CNT_TYPES.some(function(x){ return /statement/i.test((x.id||'')+' '+(x.label||'')); })) { CNT_TYPES.push({id:'STATEMENT', label:'Statement', avgMin:25}); saveCntTypes(); } } catch(e){}
@@ -2067,7 +2070,11 @@ function setRole(role) {
 
 function applyRoleVisibility() {
   if (!currentRole) return;
-  const allowed = ROLE_PAGES[currentRole] || [];
+  let allowed = ROLE_PAGES[currentRole] || [];
+  // Restricción por usuario: subconjunto de módulos definido al dar de alta.
+  if (currentUser && Array.isArray(currentUser.pages) && currentUser.pages.length) {
+    allowed = allowed.filter(p => currentUser.pages.indexOf(p) !== -1);
+  }
   document.querySelectorAll('.nav-item').forEach(el => {
     const page = el.dataset.page;
     if (!page) return;
@@ -2595,7 +2602,7 @@ function renderCalendar() {
   document.getElementById('cal-selected-info').textContent = acts.length === 0 ? 'Sin actividades' : acts.length+' actividad'+(acts.length>1?'es':'');
 }
 
-const APP_VERSION = 'v2026.07.17-h';
+const APP_VERSION = 'v2026.07.17-k';
 function paintVersionStamp(){ const el = document.getElementById('app-version-stamp'); if (el) el.textContent = APP_VERSION; }
 function openDayEntry(id) {
   // Las entradas del día pueden ser actividades reales o virtuales
@@ -3010,14 +3017,22 @@ function renderPanel() {
 
   // Tablero
   const tasks = getFilteredPanelTasks();
+  const derivadas = tasks.filter(isDerivedByMe);
+  const mias = tasks.filter(t => !isDerivedByMe(t));
   h += '<div class="card">';
-  h += '<div class="card-h"><div class="card-title">✓ Mis tareas ('+tasks.length+')</div></div>';
-  if (tasks.length === 0) {
+  h += '<div class="card-h"><div class="card-title">✓ Mis tareas ('+mias.length+')</div></div>';
+  if (mias.length === 0) {
     h += '<div style="font-size:12.5px;color:var(--text-muted);padding:14px 4px;text-align:center;">No hay tareas con estos filtros. Creá una con "+ Nueva tarea".</div>';
   } else {
-    tasks.forEach(t => h += renderPanelTaskRow(t));
+    mias.forEach(t => h += renderPanelTaskRow(t));
   }
   h += '</div>';
+  if (derivadas.length) {
+    h += '<div class="card" style="margin-top:16px;">';
+    h += '<div class="card-h"><div><div class="card-title">📤 Derivadas al equipo ('+derivadas.length+')</div><div class="card-sub">Tareas que asignaste — seguimiento y conclusión</div></div></div>';
+    derivadas.forEach(t => h += renderPanelTaskRow(t));
+    h += '</div>';
+  }
 
   c.innerHTML = h;
 }
@@ -3183,7 +3198,9 @@ function renderPanelTaskRow(t) {
   });
   if (t.evidence && t.evidence.length) h += '<span class="bdg" style="background:var(--bg-page);color:var(--text-muted);">📎 '+t.evidence.length+'</span>';
   if (t.inCalendar) h += '<span class="bdg" style="background:#FEF3C7;color:#92400E;">🗓 En calendario</span>';
-  h += '</div></div>';
+  h += '</div>';
+  if (t.conclusion) h += '<div style="margin-top:8px;font-size:11.5px;background:#F0FDF4;border-left:3px solid #047857;padding:6px 9px;border-radius:4px;color:#065F46;"><b>Conclusión:</b> '+esc(t.conclusion)+'</div>';
+  h += '</div>';
   return h;
 }
 
@@ -3191,10 +3208,15 @@ function setPanelTaskStatus(id, st) {
   const t = findPanelTask(id);
   if (!t) return;
   t.status = st;
+  if (st === 'Completado') {
+    const msg = prompt('Conclusión / mensaje de cierre (opcional):', t.conclusion || '');
+    if (msg !== null) t.conclusion = msg.trim();
+  }
   savePanelStores();
   renderPanel();
   if (t.inCalendar) renderDashboard();
 }
+function isDerivedByMe(t){ const me = panelMyZe(); return t.owner === me && (t.involved||[]).some(p => p.ze && p.ze !== me); }
 
 function renderMonthlyKpis(monthStr) { return ''; }
 
@@ -3218,11 +3240,13 @@ function openPanelTaskModal(id) {
   document.getElementById('pt-priority').value = t ? (t.priority||'Normal') : 'Normal';
   document.getElementById('pt-calendar').checked = t ? !!t.inCalendar : false;
   document.getElementById('pt-cal-time').value = t ? (t.calTime||'') : '';
+  document.getElementById('pt-conclusion').value = t ? (t.conclusion||'') : '';
   _ptInvolved = (t && Array.isArray(t.involved)) ? JSON.parse(JSON.stringify(t.involved)) : [];
   _ptTags = (t && Array.isArray(t.tags)) ? t.tags.slice() : [];
   _ptEvidence = (t && Array.isArray(t.evidence)) ? JSON.parse(JSON.stringify(t.evidence)) : [];
   document.getElementById('pt-modal-title').textContent = t ? 'Editar tarea' : 'Nueva tarea';
   ptToggleCalendar();
+  ptToggleConclusion();
   renderPtCollabOptions(); renderPtInvolved(); renderPtTags(); renderPtEvidence();
   document.getElementById('modal-panel-task').classList.add('active');
 }
@@ -3287,10 +3311,19 @@ function ptToggleCalendar() {
   const on = document.getElementById('pt-calendar').checked;
   document.getElementById('pt-cal-time-wrap').style.display = on ? '' : 'none';
 }
+function ptToggleConclusion() {
+  const done = document.getElementById('pt-status').value === 'Completado';
+  document.getElementById('pt-conclusion-wrap').style.display = done ? '' : 'none';
+}
 
 function savePanelTask() {
   const name = document.getElementById('pt-name').value.trim();
   if (!name) { alert('El nombre de la tarea es obligatorio.'); return; }
+  if (document.getElementById('pt-calendar').checked && !document.getElementById('pt-due').value) {
+    alert('Para que la tarea aparezca en el calendario, poné una "Fecha de cierre".');
+    document.getElementById('pt-due').focus();
+    return;
+  }
   const id = editingPanelTaskId || ('pt'+Date.now());
   const prev = editingPanelTaskId ? findPanelTask(editingPanelTaskId) : null;
   const obj = {
@@ -3305,6 +3338,7 @@ function savePanelTask() {
     evidence: _ptEvidence.slice(),
     inCalendar: document.getElementById('pt-calendar').checked,
     calTime: document.getElementById('pt-cal-time').value || '',
+    conclusion: document.getElementById('pt-conclusion').value.trim(),
     owner: prev && prev.owner ? prev.owner : (currentUser ? currentUser.ze : ''),
     createdAt: prev && prev.createdAt ? prev.createdAt : new Date().toISOString()
   };
@@ -3316,7 +3350,7 @@ function savePanelTask() {
   if (hasSystem) {
     const prevAcc = (prev && prev.acceptance) ? prev.acceptance : {};
     const acc = {};
-    obj.involved.forEach(p => { if (p.ze && p.ze !== obj.owner) acc[p.ze] = prevAcc[p.ze] || 'pending'; });
+    obj.involved.forEach(p => { if (p.ze && p.ze !== obj.owner) acc[p.ze] = prevAcc[p.ze] || 'accepted'; });
     obj.acceptance = acc;
     sharedTasks.push(obj);
   } else {
@@ -4467,6 +4501,19 @@ function trainingDealerIdx(t) {
 function trainingDealerName(t) {
   const d = trainingDealer(t);
   return d ? d.n : '';
+}
+function migrateSharedTaskAcceptance() {
+  // Modelo de derivación directa: las tareas compartidas que quedaron "pendientes
+  // de aceptar" pasan a "aceptadas" para que aparezcan directo en panel y calendario.
+  let changed = false;
+  (sharedTasks || []).forEach(function(t) {
+    if (t.acceptance) {
+      Object.keys(t.acceptance).forEach(function(ze) {
+        if (t.acceptance[ze] === 'pending') { t.acceptance[ze] = 'accepted'; changed = true; }
+      });
+    }
+  });
+  if (changed) save(STORAGE.sharedTasks, sharedTasks);
 }
 function migrateTrainingDealerCodes() {
   let changed = false;
@@ -10459,10 +10506,30 @@ function openUserModal(ze) {
   Object.keys(ROLES).forEach(k => {
     const r = ROLES[k];
     const checked = u && u.areas && u.areas.indexOf(k) !== -1;
-    h += '<label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:13px;"><input type="checkbox" value="'+k+'" '+(checked?'checked':'')+' style="width:15px;height:15px;"><span style="display:flex;align-items:center;gap:6px;"><span style="width:20px;height:20px;border-radius:50%;background:'+r.color+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">'+r.av+'</span>'+r.label+'</span></label>';
+    h += '<label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:13px;"><input type="checkbox" value="'+k+'" '+(checked?'checked':'')+' onchange="renderUmPages()" style="width:15px;height:15px;"><span style="display:flex;align-items:center;gap:6px;"><span style="width:20px;height:20px;border-radius:50%;background:'+r.color+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">'+r.av+'</span>'+r.label+'</span></label>';
   });
   box.innerHTML = h;
+  _umPages = (u && Array.isArray(u.pages)) ? u.pages.slice() : [];
+  renderUmPages();
   document.getElementById('modal-user').classList.add('active');
+}
+let _umPages = [];
+function umAvailablePages() {
+  const areas = Array.from(document.querySelectorAll('#um-areas input:checked')).map(el => el.value);
+  const seen = {}, out = [];
+  areas.forEach(a => (ROLE_PAGES[a] || []).forEach(p => { if (!seen[p]) { seen[p]=1; out.push(p); } }));
+  return out;
+}
+function renderUmPages() {
+  const box = document.getElementById('um-pages'); if (!box) return;
+  const avail = umAvailablePages();
+  if (!avail.length) { box.innerHTML = '<span style="font-size:11.5px;color:var(--text-muted);">Elegí un área primero.</span>'; return; }
+  // Sin restricción guardada (pages vacío) = todos visibles.
+  const full = !(_umPages && _umPages.length);
+  box.innerHTML = avail.map(function(p){
+    const on = full || _umPages.indexOf(p) !== -1;
+    return '<label style="display:flex;align-items:center;gap:7px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12.5px;"><input type="checkbox" data-page-perm="'+p+'" '+(on?'checked':'')+' style="width:14px;height:14px;">'+esc(PAGE_LABELS[p]||p)+'</label>';
+  }).join('');
 }
 
 let _umTeam = [];
@@ -10523,9 +10590,12 @@ function saveUser() {
   if (!email) { alert('El email es obligatorio: tiene que coincidir con el de la invitación en Supabase, porque es lo que vincula al usuario con su acceso.'); return; }
   const areas = Array.from(document.querySelectorAll('#um-areas input:checked')).map(el => el.value);
   if (areas.length === 0) { alert('Asigná al menos un área'); return; }
+  const availPages = umAvailablePages();
+  const checkedPages = Array.from(document.querySelectorAll('#um-pages input:checked')).map(el => el.getAttribute('data-page-perm'));
+  const pages = (checkedPages.length >= availPages.length) ? [] : checkedPages; // todos = acceso completo
   const hasTeam = document.getElementById('um-has-team').value === 'si';
   const userData = {
-    ze, firstname, lastname, pin, areas,
+    ze, firstname, lastname, pin, areas, pages,
     dept: document.getElementById('um-dept').value.trim(),
     cargo: document.getElementById('um-cargo').value.trim(),
     email: document.getElementById('um-email').value.trim(),
