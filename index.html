@@ -386,12 +386,13 @@ textarea{resize:vertical;min-height:60px;}
       <div class="user-name">Garantías</div>
       <div class="user-role">Admin</div>
     </div>
+    <button onclick="openNotifications()" id="notif-bell" title="Notificaciones" style="position:relative;background:transparent;border:none;color:rgba(255,255,255,0.6);cursor:pointer;font-size:17px;line-height:1;padding:6px 8px;border-radius:6px;flex-shrink:0;" onmouseover="this.style.color='#fff';this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.color='rgba(255,255,255,0.6)';this.style.background='transparent'">🔔<span id="notif-badge" style="display:none;position:absolute;top:0;right:0;min-width:15px;height:15px;padding:0 3px;background:#E4002B;color:#fff;border-radius:8px;font-size:9px;font-weight:700;align-items:center;justify-content:center;line-height:1;">0</span></button>
     <button onclick="confirmLogout()" title="Cerrar sesión" style="background:transparent;border:none;color:rgba(255,255,255,0.55);cursor:pointer;font-size:18px;line-height:1;padding:6px 8px;border-radius:6px;flex-shrink:0;" onmouseover="this.style.color='#fff';this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.color='rgba(255,255,255,0.55)';this.style.background='transparent'">⏻</button>
   </div>
   <div style="padding:12px 16px;text-align:center;">
       <div style="font-size:13px;font-weight:700;color:#fff;letter-spacing:0.08em;">Y-Net</div>
       <div style="font-size:9px;color:rgba(255,255,255,0.5);letter-spacing:0.03em;margin-top:2px;">Warranty Operations Platform</div>
-      <div id="app-version-stamp" style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:3px;">v2026.07.17-f</div>
+      <div id="app-version-stamp" style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:3px;">v2026.07.17-r</div>
     </div>
 </aside>
 
@@ -687,18 +688,41 @@ textarea{resize:vertical;min-height:60px;}
 
 <!-- CASE MODAL (Análisis) -->
 <div class="modal-bg" id="modal-case">
-  <div class="modal">
+  <div class="modal" style="max-width:640px;">
     <div class="modal-h"><div class="modal-title" id="case-modal-title">Nuevo caso</div><button class="modal-close" onclick="closeModal('modal-case')">×</button></div>
-    <div class="field"><label>Título del caso *</label><input type="text" id="case-title" placeholder="Ej: Falla recurrente embrague modelo XTZ"></div>
     <div class="field-row">
-      <div class="field"><label>Origen</label><select id="case-origin"><option>Ensamble</option><option>Logística</option><option>Repuestos</option><option>Otro</option></select></div>
-      <div class="field"><label>Estado</label><select id="case-status"><option>Abierto</option><option>En análisis</option><option>Derivado</option><option>Cerrado</option></select></div>
+      <div class="field" style="max-width:140px;"><label>N° de caso</label><input type="text" id="case-no" readonly style="background:var(--bg-page);font-weight:700;color:var(--primary);"></div>
+      <div class="field"><label>Nombre del modelo *</label><input type="text" id="case-model" placeholder="Ej: XTZ 250"></div>
     </div>
-    <div class="field"><label>Áreas involucradas</label><input type="text" id="case-areas" placeholder="Ej: Producción, Calidad"></div>
-    <div class="field"><label>Causa raíz (si identificada)</label><textarea id="case-cause" rows="2"></textarea></div>
-    <div class="field"><label>Avance: <span id="case-progress-val">0</span>%</label><input type="range" id="case-progress" min="0" max="100" step="5" value="0" oninput="document.getElementById('case-progress-val').textContent=this.value"></div>
-    <div class="field"><label>Tiempo invertido en análisis (min)</label><input type="number" id="case-time" min="0" step="15" placeholder="Sumá los minutos a medida que avanzás"></div>
-    <div class="field"><label>Link a evidencia (fotos, documentos en tu equipo o Drive)</label><input type="text" id="case-evidence" placeholder="https://drive.google.com/... o ruta local"></div>
+    <div class="field-row">
+      <div class="field"><label>Origen</label><select id="case-origin"><option>Ensamble</option><option>Logística</option><option>Repuestos</option><option>Concesionario</option><option>Usuario</option><option>Mercado</option><option>Otro</option></select></div>
+      <div class="field"><label>Concesionario</label><select id="case-dealer"></select></div>
+    </div>
+    <div class="field"><label>Descripción del caso *</label><textarea id="case-desc" rows="3" placeholder="Describí el caso a analizar..."></textarea></div>
+    <div class="field-row">
+      <div class="field"><label>Estado</label><select id="case-status"><option>Abierto</option><option>En análisis</option><option>Derivado</option><option>Cerrado</option></select></div>
+      <div class="field"><label>Tiempo de análisis (min)</label><input type="number" id="case-time" min="0" step="15" placeholder="0"></div>
+    </div>
+    <div class="field"><label>Avance del análisis</label>
+      <select id="case-progress" onchange="caseStageChanged()">
+        <option value="0">0% — Sin relevar</option>
+        <option value="25">25% — Relevado</option>
+        <option value="50">50% — En análisis</option>
+        <option value="75">75% — Conclusión</option>
+        <option value="100">100% — Documentado y presentado</option>
+      </select>
+      <div class="progress" style="margin-top:8px;height:8px;"><div class="progress-bar" id="case-progress-bar" style="width:0%"></div></div>
+      <div id="case-stage-desc" style="font-size:11.5px;color:var(--text-muted);margin-top:5px;"></div>
+    </div>
+    <div class="field"><label>Evidencia (link a fotos / documentos)</label><input type="text" id="case-evidence" placeholder="https://drive.google.com/..."></div>
+    <div class="field"><label>Analista (inició el análisis)</label><input type="text" id="case-analyst" readonly style="background:var(--bg-page);"></div>
+    <div class="field"><label>Personas involucradas (líderes / a cargo)</label><div id="case-involved" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:5px;"></div></div>
+    <div class="field"><label>Áreas involucradas (texto libre)</label><input type="text" id="case-areas" placeholder="Ej: Producción, Calidad"></div>
+    <div class="field" style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="case-calendar" onchange="caseToggleCal()" style="width:16px;height:16px;"><label for="case-calendar" style="margin:0;cursor:pointer;">Añadir al calendario del dashboard</label></div>
+    <div class="field-row" id="case-cal-fields" style="display:none;">
+      <div class="field"><label>Fecha</label><input type="date" id="case-due"></div>
+      <div class="field"><label>Hora</label><input type="time" id="case-caltime"></div>
+    </div>
     <div class="field"><label>Notas</label><textarea id="case-notes" rows="2"></textarea></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="case-delete-btn" style="display:none;color:var(--primary);" onclick="deleteCase()">Eliminar</button>
@@ -1102,6 +1126,16 @@ textarea{resize:vertical;min-height:60px;}
     <div class="field"><label>Concesionario (opcional)</label><select id="cnt-entry-dealer"><option value="">— sin asignar —</option></select></div>
     <div class="field"><label>Otro contacto (si no es concesionario)</label><input type="text" id="cnt-entry-other" placeholder="Nombre de persona o área interna"></div>
     <div class="field"><label>Notas</label><textarea id="cnt-entry-notes" rows="2"></textarea></div>
+    <div id="cnt-ficha" style="display:none;border-top:1px solid var(--border);margin-top:4px;padding-top:10px;">
+      <div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">Ficha de consulta</div>
+      <div class="field"><label>Usuario que consulta</label><input type="text" id="cnt-entry-user" placeholder="Nombre / concesionario / email de quien consulta"></div>
+      <div class="field"><label>Fecha de respuesta</label><input type="date" id="cnt-entry-respdate"></div>
+      <div class="field"><label>Mensaje del usuario</label><textarea id="cnt-entry-msg" rows="3" placeholder="Pegá acá el mensaje que transmite el usuario"></textarea></div>
+      <div class="field"><label>Respuesta Yamaha</label><textarea id="cnt-entry-reply" rows="3" placeholder="Pegá acá lo que le respondemos"></textarea></div>
+      <div class="field"><label>Acción</label><textarea id="cnt-entry-action" rows="2" placeholder="Iniciativa o acción tomada (si corresponde)"></textarea></div>
+      <div class="field" style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="cnt-entry-followup" style="width:16px;height:16px;" onchange="cntToggleFollowup()"><label for="cnt-entry-followup" style="margin:0;cursor:pointer;">Dar seguimiento — cargar al calendario como actividad</label></div>
+      <div class="field" id="cnt-followup-date-wrap" style="display:none;"><label>Fecha de seguimiento</label><input type="date" id="cnt-entry-followup-date"></div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="cnt-entry-delete" style="color:var(--primary);margin-right:auto;" onclick="deleteCntEntry()">Eliminar</button>
       <button class="btn btn-ghost" onclick="closeModal('modal-cnt-entry')">Cancelar</button>
@@ -1210,17 +1244,34 @@ textarea{resize:vertical;min-height:60px;}
 </div>
 
 <!-- PANEL TASK MODAL -->
+<div class="modal-bg" id="modal-kpi-picker">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-h"><div class="modal-title">＋ Añadir / quitar KPIs</div><button class="modal-close" onclick="closeModal('modal-kpi-picker')">×</button></div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">Elegí qué indicadores ver en tu panel. Se guardan por perfil.</div>
+    <div id="kpi-picker-list" style="max-height:56vh;overflow-y:auto;"></div>
+    <div class="modal-actions"><div style="flex:1;"></div><button class="btn btn-ghost" onclick="closeModal('modal-kpi-picker')">Cancelar</button><button class="btn btn-primary" onclick="saveKpiPicker()">Guardar</button></div>
+  </div>
+</div>
+<div class="modal-bg" id="modal-notifs">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-h"><div class="modal-title">🔔 Notificaciones</div><button class="modal-close" onclick="closeModal('modal-notifs')">×</button></div>
+    <div id="notif-list" style="max-height:60vh;overflow-y:auto;margin:-4px -4px 0;"></div>
+    <div class="modal-actions"><button class="btn btn-ghost btn-sm" onclick="clearNotifs()" style="margin-right:auto;color:var(--text-muted);">Vaciar</button><button class="btn btn-ghost" onclick="closeModal('modal-notifs')">Cerrar</button></div>
+  </div>
+</div>
 <div class="modal-bg" id="modal-panel-task" style="z-index:300;">
   <div class="modal" style="max-width:560px;">
     <div class="modal-h"><div class="modal-title" id="pt-modal-title">Nueva tarea</div><button class="modal-close" onclick="closeModal('modal-panel-task')">×</button></div>
+    <div id="pt-assignee-note" style="display:none;background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;">Tarea derivada por tu líder. Podés ajustar <b>fecha/hora</b>, <b>estado</b>, dejar un <b>comentario</b> y <b>adjuntar archivos</b>.</div>
     <div class="field"><label>Nombre de la tarea *</label><input type="text" id="pt-name" placeholder="Ej: Revisar reclamos pendientes"></div>
     <div class="field"><label>Descripción</label><textarea id="pt-desc" rows="2" placeholder="Detalle de la tarea..."></textarea></div>
     <div class="field-row">
-      <div class="field"><label>Estado</label><select id="pt-status"><option>Pendiente</option><option>En curso</option><option>Completado</option></select></div>
+      <div class="field"><label>Estado</label><select id="pt-status" onchange="ptToggleConclusion()"><option>Pendiente</option><option>En curso</option><option>Completado</option></select></div>
       <div class="field"><label>Prioridad</label><select id="pt-priority"><option>Urgente</option><option>Alta</option><option selected>Normal</option><option>Baja</option></select></div>
     </div>
     <div class="field"><label>Fecha de cierre</label><input type="date" id="pt-due"></div>
-    <div class="field"><label>Personas involucradas</label>
+    <div class="field" id="pt-conclusion-wrap" style="display:none;"><label>Conclusión / mensaje de cierre</label><textarea id="pt-conclusion" rows="3" placeholder="Al completar: dejá un mensaje o conclusión sobre cómo se resolvió."></textarea></div>
+    <div class="field" id="pt-involved-field"><label>Personas involucradas</label>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px;">
         <select id="pt-collab-select" style="flex:1;min-width:160px;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:6px;"></select>
         <button class="btn btn-ghost btn-sm" type="button" onclick="ptAddCollaborator()">+ Agregar</button>
@@ -1231,7 +1282,7 @@ textarea{resize:vertical;min-height:60px;}
       </div>
       <div id="pt-involved-list"></div>
     </div>
-    <div class="field"><label>Etiquetas</label>
+    <div class="field" id="pt-tags-field"><label>Etiquetas</label>
       <div id="pt-tags-list" style="margin-bottom:6px;"></div>
       <div style="display:flex;gap:6px;align-items:center;">
         <input type="text" id="pt-newtag" placeholder="Crear nueva etiqueta" style="flex:1;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:6px;">
@@ -1278,6 +1329,7 @@ textarea{resize:vertical;min-height:60px;}
     <div style="font-size:12px;font-weight:600;color:var(--primary);margin:14px 0 10px;border-bottom:1px solid var(--border);padding-bottom:6px;">Alta de usuario</div>
     <div class="field-row"><div class="field"><label>Código ZE *</label><input type="text" id="um-ze" placeholder="Ej: ZE12345" style="text-transform:uppercase;"></div><div class="field"><label>PIN *</label><input type="text" id="um-pin" inputmode="numeric" maxlength="8" placeholder="4 dígitos"></div></div>
     <div class="field"><label>Áreas permitidas *</label><div id="um-areas" style="display:flex;flex-direction:column;gap:6px;"></div></div>
+    <div class="field"><label>Módulos visibles para este usuario</label><div id="um-pages" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;"></div><div style="font-size:11px;color:var(--text-muted);margin-top:5px;">Destildá los módulos que este usuario NO debe ver (dentro de lo que permite su área). Todos tildados = acceso completo.</div></div>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:8px;"><input type="checkbox" id="um-active" checked style="width:15px;height:15px;"><span>Usuario activo</span></label>
     <div class="modal-actions"><div style="flex:1;"></div><button class="btn btn-ghost" onclick="closeModal('modal-user')">Cancelar</button><button class="btn btn-primary" onclick="saveUser()">Guardar</button></div>
   </div>
@@ -1615,7 +1667,6 @@ let currentUser = null; // the logged-in user object
 function findUserByZE(ze) {
   return users.find(u => (u.ze||'').toUpperCase() === (ze||'').toUpperCase());
 }
-// Which pages each role can see — EDITABLE por el administrador.
 const DEFAULT_ROLE_PAGES = {
   garantias:      ['dashboard','panel','contador','concesionarios','analisis','recall','evaldlr','viajes','capacitaciones','biblioteca'],
   tecnica:        ['dashboard','panel','contador','concesionarios','viajes','capacitaciones','biblioteca'],
@@ -1625,6 +1676,7 @@ const DEFAULT_ROLE_PAGES = {
   admin:          ['admin-panel','soporte','usuarios','areas','comunicados']
 };
 let ROLE_PAGES = JSON.parse(localStorage.getItem('gg_role_pages_v1') || 'null') || JSON.parse(JSON.stringify(DEFAULT_ROLE_PAGES));
+const PAGE_LABELS = { dashboard:'Dashboard', panel:'Panel de control', contador:'Cuantificador', concesionarios:'Concesionarios', analisis:'Desarrollo de Actividades', recall:'Recall', evaldlr:'Evaluación Dlr', viajes:'Viajes', capacitaciones:'Capacitaciones', biblioteca:'Biblioteca', usuarios:'Usuarios' };
 // El administrador siempre ve todos los módulos de gestión.
 ROLE_PAGES.admin = ['admin-panel','soporte','usuarios','areas','comunicados'];
 function saveRolePages() { localStorage.setItem('gg_role_pages_v1', JSON.stringify(ROLE_PAGES)); }
@@ -1754,6 +1806,11 @@ function reloadRoleScopedState() {
   panelTasks = load(STORAGE.panelTasks);
   panelTags = load(STORAGE.panelTags);
   sharedTasks = load(STORAGE.sharedTasks);
+  _notifs = load(STORAGE.notifs) || [];
+  panelKpis = load(STORAGE.panelKpis) || [];
+  panelLayout = load(STORAGE.panelLayout) || {};
+  try { const _firstRun = !_notifs.length; generateNotifs(_firstRun); } catch(e){}
+  try { startLiveSync(); } catch(e){}
   if (!panelTags || panelTags.length === 0) { panelTags = DEFAULT_PANEL_TAGS.slice(); save(STORAGE.panelTags, panelTags); }
   // Re-init defaults if empty (training areas/topics, library categories)
   if (!trainingAreas || trainingAreas.length === 0) { trainingAreas = ['Garantías']; save(STORAGE.trainingAreas, trainingAreas); }
@@ -1763,6 +1820,7 @@ function reloadRoleScopedState() {
   stampLegacyOwnership();
   cleanupSeededInbox();
   migrateTrainingDealerCodes();
+  migrateSharedTaskAcceptance();
   // Cuantificador y tipos de actividad: por usuario
   try { const s = JSON.parse(localStorage.getItem(scopedKey('gg_cnt_types_v1'))||'null'); CNT_TYPES = (s&&Array.isArray(s)&&s.length>0)?s:JSON.parse(JSON.stringify(DEFAULT_CNT_TYPES)); } catch(e){ CNT_TYPES = JSON.parse(JSON.stringify(DEFAULT_CNT_TYPES)); }
   try { if (Array.isArray(CNT_TYPES) && !CNT_TYPES.some(function(x){ return /statement/i.test((x.id||'')+' '+(x.label||'')); })) { CNT_TYPES.push({id:'STATEMENT', label:'Statement', avgMin:25}); saveCntTypes(); } } catch(e){}
@@ -2057,7 +2115,11 @@ function setRole(role) {
 
 function applyRoleVisibility() {
   if (!currentRole) return;
-  const allowed = ROLE_PAGES[currentRole] || [];
+  let allowed = ROLE_PAGES[currentRole] || [];
+  // Restricción por usuario: subconjunto de módulos definido al dar de alta.
+  if (currentUser && Array.isArray(currentUser.pages) && currentUser.pages.length) {
+    allowed = allowed.filter(p => currentUser.pages.indexOf(p) !== -1);
+  }
   document.querySelectorAll('.nav-item').forEach(el => {
     const page = el.dataset.page;
     if (!page) return;
@@ -2164,13 +2226,16 @@ const STORAGE = {
   fixedTasks: 'gg_fixed_tasks_v1',
   panelTasks: 'gg_panel_tasks_v1',
   panelTags: 'gg_panel_tags_v1',
-  sharedTasks: 'gg_shared_tasks_v1'
+  sharedTasks: 'gg_shared_tasks_v1',
+  notifs: 'gg_notifications_v1',
+  panelKpis: 'gg_panel_kpis_v1',
+  panelLayout: 'gg_panel_layout_v1'
 };
 // Claves cuyos datos son PERSONALES (scope por usuario / ZE). El resto es compartido.
 // Compartidos: Concesionarios, Recall, Capacitaciones y Biblioteca.
 const PER_PROFILE_KEYS = [
   'gg_activities_v1','gg_counter_v1','gg_cases_v1','gg_objectives_v1','gg_fixed_tasks_v1',
-  'gg_panel_tasks_v1','gg_panel_tags_v1','gg_cnt_types_v1','gg_act_types_v1',
+  'gg_panel_tasks_v1','gg_panel_tags_v1','gg_cnt_types_v1','gg_act_types_v1','gg_notifications_v1','gg_panel_kpis_v1','gg_panel_layout_v1',
   'gg_trips_v1','gg_trip_visits_v1','gg_trip_expenses_v1','gg_trip_places_v1','gg_trip_participants_v1'
 ];
 function scopedKey(k) {
@@ -2262,6 +2327,11 @@ let fixedTasks = load(STORAGE.fixedTasks);
 let panelTasks = load(STORAGE.panelTasks);
 let panelTags = load(STORAGE.panelTags);
 let sharedTasks = load(STORAGE.sharedTasks);
+let _notifs = load(STORAGE.notifs) || [];
+let panelKpis = load(STORAGE.panelKpis) || [];
+let panelLayout = load(STORAGE.panelLayout) || {};
+let _sharedTasksRaw = null;
+let _liveSyncStarted = false;
 function saveSupportChats() { localStorage.setItem('gg_support_chats_v1', JSON.stringify(supportChats)); }
 function saveComunicados() { localStorage.setItem('gg_comunicados_v1', JSON.stringify(comunicados)); }
 function saveTickets() { localStorage.setItem('gg_tickets_v1', JSON.stringify(tickets)); }
@@ -2512,6 +2582,19 @@ function getActivitiesOn(dateStr) {
       });
     }
   });
+  // Casos de Desarrollo de Actividades marcados "en calendario"
+  (cases || []).forEach(cs => {
+    if (cs.inCalendar && cs.dueDate === dateStr) {
+      const prog = cs.progress || 0;
+      out.push({
+        id: 'case-'+cs.id, virtual:'case', refId:cs.id,
+        title: (cs.caseNo?cs.caseNo+' · ':'') + (cs.model||'Caso'), type: 'Caso',
+        country: '', date: cs.dueDate, time: cs.calTime || '', duration: 0,
+        status: prog===100 ? 'Hecho' : prog>0 ? 'En curso' : 'Pendiente',
+        notes: cs.description || ''
+      });
+    }
+  });
   return out;
 }
 
@@ -2585,7 +2668,7 @@ function renderCalendar() {
   document.getElementById('cal-selected-info').textContent = acts.length === 0 ? 'Sin actividades' : acts.length+' actividad'+(acts.length>1?'es':'');
 }
 
-const APP_VERSION = 'v2026.07.17-f';
+const APP_VERSION = 'v2026.07.17-r';
 function paintVersionStamp(){ const el = document.getElementById('app-version-stamp'); if (el) el.textContent = APP_VERSION; }
 function openDayEntry(id) {
   // Las entradas del día pueden ser actividades reales o virtuales
@@ -2594,6 +2677,7 @@ function openDayEntry(id) {
   if (a && a.virtual === 'training') { openTrainingModal(a.refId); return; }
   if (a && a.virtual === 'visit') { openVisitModal(a.refId); return; }
   if (a && a.virtual === 'paneltask') { openPanelTaskModal(a.refId); return; }
+  if (a && a.virtual === 'case') { openCaseModal(a.refId); return; }
   openActivityModal(id, (a && a._isInstance) ? (a._instanceDate || selectedDate) : null);
 }
 function toggleActivityInstance(id, dateStr){
@@ -2951,6 +3035,86 @@ function renderPanelActivitiesByMonth(){
   return h;
 }
 
+// ── Notificaciones + sincronización en vivo ──
+function _notifAssigneeName(t){
+  const me = currentUser ? currentUser.ze : '';
+  const p = (t.involved||[]).find(x => x.ze && x.ze !== t.owner);
+  if (!p) return '';
+  const u = findUserByZE(p.ze);
+  return u ? userFullName(u) : p.ze;
+}
+function pushNotif(key, type, text, seen){
+  if (!_notifs) _notifs = [];
+  if (_notifs.some(n => n.key === key)) return false;
+  _notifs.push({ id: Date.now()+''+Math.floor(Math.random()*1000), key: key, type: type, text: text, ts: new Date().toISOString(), seen: !!seen });
+  if (_notifs.length > 100) _notifs = _notifs.slice(-100);
+  save(STORAGE.notifs, _notifs);
+  return true;
+}
+function generateNotifs(markSeen){
+  const ze = currentUser ? currentUser.ze : '';
+  if (!ze) return;
+  (sharedTasks||[]).forEach(function(t){
+    const iAmInvolved = (t.involved||[]).some(p => p.ze === ze);
+    const iOwn = t.owner === ze;
+    if (iAmInvolved && !iOwn) pushNotif('assigned:'+t.id, 'assigned', 'Te derivaron una tarea: ' + (t.name||''), markSeen);
+    if (iOwn && t.status === 'Completado'){ const who = _notifAssigneeName(t); pushNotif('done:'+t.id, 'done', 'Tarea completada' + (who?(' por '+who):'') + ': ' + (t.name||''), markSeen); }
+  });
+  renderNotifBadge();
+}
+function notifUnseenCount(){ return (_notifs||[]).filter(n => !n.seen).length; }
+function renderNotifBadge(){
+  const b = document.getElementById('notif-badge'); if (!b) return;
+  const n = notifUnseenCount();
+  b.textContent = n > 9 ? '9+' : String(n);
+  b.style.display = n > 0 ? 'flex' : 'none';
+}
+function openNotifications(){
+  const box = document.getElementById('notif-list');
+  if (box){
+    const list = (_notifs||[]).slice().sort((a,b)=>(b.ts||'').localeCompare(a.ts||''));
+    if (!list.length){ box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px;">Sin notificaciones.</div>'; }
+    else {
+      box.innerHTML = list.map(function(n){
+        const icon = n.type==='done' ? '✅' : n.type==='assigned' ? '📥' : '🔔';
+        const d = n.ts ? new Date(n.ts) : null;
+        const when = d ? d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : '';
+        return '<div style="display:flex;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);'+(n.seen?'':'background:#EFF6FF;')+'"><span style="font-size:16px;">'+icon+'</span><div style="flex:1;min-width:0;"><div style="font-size:13px;">'+esc(n.text)+'</div><div style="font-size:10.5px;color:var(--text-muted);margin-top:2px;">'+when+'</div></div></div>';
+      }).join('');
+    }
+  }
+  document.getElementById('modal-notifs').classList.add('active');
+  (_notifs||[]).forEach(n => n.seen = true);
+  save(STORAGE.notifs, _notifs);
+  renderNotifBadge();
+}
+function clearNotifs(){ if(!confirm('¿Vaciar todas las notificaciones?')) return; _notifs = []; save(STORAGE.notifs, _notifs); openNotifications(); }
+function ynetPollSync(){
+  if (!window.__sb || !window.__YNET_CLOUD || !currentUser) return;
+  try {
+    window.__sb.from('app_data').select('k,v').eq('k','gg_shared_tasks_v1').then(function(res){
+      if (!res || res.error || !res.data || !res.data.length) return;
+      const v = res.data[0].v;
+      if (v === _sharedTasksRaw) return;
+      _sharedTasksRaw = v;
+      let parsed = null; try { parsed = JSON.parse(v); } catch(e){ return; }
+      if (!Array.isArray(parsed)) return;
+      sharedTasks = parsed;
+      if (window.__ynetApplyRemote) window.__ynetApplyRemote('gg_shared_tasks_v1', v);
+      generateNotifs(false);
+      const pp = document.getElementById('page-panel'); if (pp && pp.classList.contains('active')) renderPanel();
+      const pd = document.getElementById('page-dashboard'); if (pd && pd.classList.contains('active')) renderDashboard();
+    }, function(){});
+  } catch(e){}
+}
+function startLiveSync(){
+  if (_liveSyncStarted) return; _liveSyncStarted = true;
+  _sharedTasksRaw = JSON.stringify(sharedTasks||[]);
+  setInterval(ynetPollSync, 12000);
+  setTimeout(ynetPollSync, 3000);
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') ynetPollSync(); });
+  window.addEventListener('focus', ynetPollSync);
+}
 function renderPanel() {
   const c = document.getElementById('panel-container');
   if (!c) return;
@@ -3000,14 +3164,29 @@ function renderPanel() {
 
   // Tablero
   const tasks = getFilteredPanelTasks();
+  const derivadas = tasks.filter(isDerivedByMe);
+  const mias = tasks.filter(t => !isDerivedByMe(t));
+
+  h += renderPanelTasksChart(mias);
+
+  const _miasHidden = isSectionHidden('mytasks');
   h += '<div class="card">';
-  h += '<div class="card-h"><div class="card-title">✓ Mis tareas ('+tasks.length+')</div></div>';
-  if (tasks.length === 0) {
-    h += '<div style="font-size:12.5px;color:var(--text-muted);padding:14px 4px;text-align:center;">No hay tareas con estos filtros. Creá una con "+ Nueva tarea".</div>';
-  } else {
-    tasks.forEach(t => h += renderPanelTaskRow(t));
+  h += '<div class="card-h" onclick="togglePanelSection(\'mytasks\')" style="cursor:pointer;"><div class="card-title">'+(_miasHidden?'\u25B8':'\u25BE')+' \u2713 Mis tareas ('+mias.length+')</div></div>';
+  if (!_miasHidden) {
+    if (mias.length === 0) {
+      h += '<div style="font-size:12.5px;color:var(--text-muted);padding:14px 4px;text-align:center;">No hay tareas con estos filtros. Creá una con "+ Nueva tarea".</div>';
+    } else {
+      mias.forEach(t => h += renderPanelTaskRow(t));
+    }
   }
   h += '</div>';
+  if (derivadas.length) {
+    const _derHidden = isSectionHidden('derived');
+    h += '<div class="card" style="margin-top:16px;">';
+    h += '<div class="card-h" onclick="togglePanelSection(\'derived\')" style="cursor:pointer;"><div><div class="card-title">'+(_derHidden?'\u25B8':'\u25BE')+' \uD83D\uDCE4 Derivadas al equipo ('+derivadas.length+')</div><div class="card-sub">Tareas que asignaste — seguimiento y conclusión</div></div></div>';
+    if (!_derHidden) derivadas.forEach(t => h += renderPanelTaskRow(t));
+    h += '</div>';
+  }
 
   c.innerHTML = h;
 }
@@ -3026,6 +3205,104 @@ function panelDeltaHtml(cur,prv){ let dir,txt; if(prv===0){ dir=cur>0?1:0; txt=c
 function svgDonut(data,size,thick){ const r=(size-thick)/2, cx=size/2, cy=size/2, C=2*Math.PI*r; const total=data.reduce(function(a,d){return a+d.val;},0); let off=0, segs=''; if(total<=0){ segs='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="#ECEEF1" stroke-width="'+thick+'"/>'; } else data.forEach(function(d){ if(d.val<=0) return; const len=(d.val/total)*C; segs+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+d.color+'" stroke-width="'+thick+'" stroke-dasharray="'+len.toFixed(2)+' '+(C-len).toFixed(2)+'" stroke-dashoffset="'+(-off).toFixed(2)+'" transform="rotate(-90 '+cx+' '+cy+')"/>'; off+=len; }); return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'+segs+'</svg>'; }
 function svgVBars(data,w,h,defColor){ const max=Math.max.apply(null,data.map(function(d){return d.val;}).concat([1])); const n=data.length||1, gap=Math.max(3,w*0.015), bw=(w-gap*(n-1))/n; let s=''; data.forEach(function(d,i){ const bh=Math.max(2,(d.val/max)*(h-30)); const x=i*(bw+gap); const y=h-22-bh; const col=d.color||defColor||'#E4002B'; s+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+bh.toFixed(1)+'" rx="3" fill="'+col+'"/>'; if(d.val) s+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(y-4).toFixed(1)+'" font-size="11" fill="#374151" text-anchor="middle" font-weight="700">'+d.val+'</text>'; s+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(h-6)+'" font-size="10" fill="#9AA0A8" text-anchor="middle">'+esc(d.label)+'</text>'; }); return '<svg width="100%" height="'+h+'" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="xMidYMid meet" style="display:block;">'+s+'</svg>'; }
 function panelKpiCard(icon,label,color,cur,prv,hint){ let h='<div style="position:relative;border:1px solid var(--border);border-radius:12px;padding:13px 14px 12px;background:#fff;overflow:hidden;">'; h+='<div style="position:absolute;top:0;left:0;width:100%;height:3px;background:'+color+';"></div>'; h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'; h+='<span style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;background:'+color+'22;font-size:15px;">'+icon+'</span>'; h+='<span style="font-size:11.5px;color:var(--text-secondary);font-weight:600;line-height:1.15;">'+esc(label)+'</span></div>'; h+='<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:6px;">'; h+='<span style="font-size:27px;font-weight:800;line-height:1;">'+cur+'</span>'; h+=(hint?'<span style="font-size:9.5px;color:var(--text-muted);text-align:right;max-width:90px;">'+esc(hint)+'</span>':panelDeltaHtml(cur,prv)); h+='</div></div>'; return h; }
+// ── KPIs personalizables del panel ──
+const DEFAULT_PANEL_KPIS = [
+  {source:'counter',key:'WHATSAPP'},{source:'counter',key:'LLAMADA'},{source:'counter',key:'MAIL'},
+  {source:'counter',key:'SUITE_WEB'},{source:'counter',key:'SOPORTE_GARANTIA'},{source:'counter',key:'RECLAMO_ARG'},
+  {source:'counter',key:'RECLAMO_UY'},{source:'counter',key:'FACTURA'},{source:'training',key:''},
+  {source:'visit',key:''},{source:'counter',key:'STATEMENT'}
+];
+const KPI_COUNTER_META = {
+  WHATSAPP:{icon:'\uD83D\uDCF1',color:'#25D366'}, LLAMADA:{icon:'\uD83D\uDCDE',color:'#1E40AF'}, MAIL:{icon:'\u2709\uFE0F',color:'#D97706'},
+  SUITE_WEB:{icon:'\uD83C\uDF10',color:'#0891B2'}, SOPORTE_GARANTIA:{icon:'\uD83D\uDEE0\uFE0F',color:'#7C3AED'}, RECLAMO_ARG:{icon:'\uD83D\uDCCB',color:'#E4002B'},
+  RECLAMO_UY:{icon:'\uD83D\uDCCB',color:'#0EA5E9'}, FACTURA:{icon:'\uD83E\uDDFE',color:'#059669'}, STATEMENT:{icon:'\uD83D\uDCC4',color:'#16181D'}, ACTIVIDAD:{icon:'\uD83D\uDCCC',color:'#6D28D9'}
+};
+const KPI_PALETTE = ['#0891B2','#DB2777','#CA8A04','#7C3AED','#059669','#E4002B','#1E40AF','#D97706'];
+function kpiId(k){ return k.source + ':' + (k.key||''); }
+function getPanelKpis(){ return (panelKpis && panelKpis.length) ? panelKpis : DEFAULT_PANEL_KPIS.slice(); }
+function kpiMeta(k){
+  if (k.source==='counter'){ const t=(CNT_TYPES||[]).find(x=>x.id===k.key); const meta=KPI_COUNTER_META[k.key]||{}; return {label:(t?t.label:k.key), icon:meta.icon||'\uD83D\uDCCA', color:meta.color||KPI_PALETTE[(k.key||'').length%KPI_PALETTE.length]}; }
+  if (k.source==='training') return {label:'Capacitaciones', icon:'\uD83C\uDF93', color:'#DB2777'};
+  if (k.source==='visit') return {label:'Visitas', icon:'\uD83E\uDDED', color:'#CA8A04'};
+  if (k.source==='activity') return {label:'Actividad: '+k.key, icon:'\uD83D\uDCCC', color:'#0891B2'};
+  if (k.source==='task') return {label:'Tareas del panel', icon:'\u2713', color:'#16181D'};
+  return {label:k.key||'?', icon:'\uD83D\uDCCA', color:'#6B7280'};
+}
+function kpiValue(k, month){
+  if (k.source==='counter') return cntMonthCount(k.key, month);
+  if (k.source==='training') return panelTrainingsMonth(month);
+  if (k.source==='visit') return panelVisitsMonth(month);
+  if (k.source==='activity') return (activities||[]).filter(a=>activityVisibleToMe(a) && a.type===k.key && (a.date||'').slice(0,7)===month).length;
+  if (k.source==='task') return myVisibleTasks().filter(t=>(t.dueDate||'').slice(0,7)===month).length;
+  return 0;
+}
+function kpiCatalog(){
+  const out=[];
+  (CNT_TYPES||[]).forEach(t=> out.push({source:'counter', key:t.id}));
+  out.push({source:'training', key:''});
+  out.push({source:'visit', key:''});
+  (actTypes||[]).forEach(t=> out.push({source:'activity', key:t}));
+  out.push({source:'task', key:''});
+  return out;
+}
+function _materializeKpis(){ if (!panelKpis || !panelKpis.length) panelKpis = DEFAULT_PANEL_KPIS.slice(); }
+function removePanelKpi(id){ _materializeKpis(); panelKpis = panelKpis.filter(k=>kpiId(k)!==id); save(STORAGE.panelKpis, panelKpis); renderPanel(); }
+let _kpiPick = {};
+function openKpiPicker(){
+  _materializeKpis();
+  _kpiPick = {}; getPanelKpis().forEach(k=>{ _kpiPick[kpiId(k)]=k; });
+  renderKpiPicker();
+  document.getElementById('modal-kpi-picker').classList.add('active');
+}
+function renderKpiPicker(){
+  const box=document.getElementById('kpi-picker-list'); if(!box) return;
+  const groups=[['Cuantificador','counter'],['Módulos','trainingvisit'],['Desarrollo de Actividades','activity'],['Tareas','task']];
+  let h='';
+  groups.forEach(function(g){
+    const items=kpiCatalog().filter(function(k){ return g[1]==='trainingvisit' ? (k.source==='training'||k.source==='visit') : k.source===g[1]; });
+    if(!items.length) return;
+    h+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin:10px 2px 6px;">'+g[0]+'</div>';
+    h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px;">';
+    items.forEach(function(k){ const id=kpiId(k); const meta=kpiMeta(k); const on=!!_kpiPick[id];
+      h+='<label style="display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid '+(on?meta.color:'var(--border)')+';border-radius:8px;cursor:pointer;font-size:12.5px;background:'+(on?meta.color+'0F':'#fff')+';"><input type="checkbox" '+(on?'checked':'')+' onchange="toggleKpiPick(\''+id+'\')" style="width:14px;height:14px;"><span>'+meta.icon+' '+esc(meta.label)+'</span></label>';
+    });
+    h+='</div>';
+  });
+  box.innerHTML=h;
+}
+function toggleKpiPick(id){
+  if(_kpiPick[id]){ delete _kpiPick[id]; }
+  else { const k=kpiCatalog().find(x=>kpiId(x)===id); if(k) _kpiPick[id]=k; }
+  renderKpiPicker();
+}
+function saveKpiPicker(){
+  // conservar orden actual + agregar nuevos al final
+  const cur=getPanelKpis().filter(k=>_kpiPick[kpiId(k)]);
+  const curIds={}; cur.forEach(k=>curIds[kpiId(k)]=1);
+  Object.keys(_kpiPick).forEach(function(id){ if(!curIds[id]) cur.push(_kpiPick[id]); });
+  panelKpis = cur;
+  save(STORAGE.panelKpis, panelKpis);
+  closeModal('modal-kpi-picker');
+  renderPanel();
+}
+function togglePanelSection(sec){ if(!panelLayout) panelLayout={}; if(!panelLayout.hidden) panelLayout.hidden={}; panelLayout.hidden[sec]=!panelLayout.hidden[sec]; save(STORAGE.panelLayout, panelLayout); renderPanel(); }
+function isSectionHidden(sec){ return !!(panelLayout && panelLayout.hidden && panelLayout.hidden[sec]); }
+function renderPanelTasksChart(list){
+  const hidden = isSectionHidden('taskschart');
+  let h = '<div style="margin:16px 2px 9px;"><div onclick="togglePanelSection(\'taskschart\')" style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:6px;">'+(hidden?'\u25B8':'\u25BE')+' Gr\u00e1fico de tareas</div></div>';
+  if (hidden) return h;
+  const st = {'Pendiente':0,'En curso':0,'Completado':0};
+  (list||[]).forEach(function(t){ if(st[t.status]!==undefined) st[t.status]++; });
+  const data=[{label:'Pendiente',color:'#D97706',val:st['Pendiente']},{label:'En curso',color:'#1E40AF',val:st['En curso']},{label:'Completado',color:'#047857',val:st['Completado']}];
+  const total=data.reduce(function(a,d){return a+d.val;},0);
+  h += '<div class="card" style="margin-bottom:16px;"><div class="card-h"><div class="card-title">\u2713 Estado de mis tareas</div></div>';
+  h += '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">';
+  h += '<div style="position:relative;width:130px;height:130px;flex-shrink:0;">'+svgDonut(data,130,22)+'<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;"><span style="font-size:26px;font-weight:800;">'+total+'</span><span style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;">tareas</span></div></div>';
+  h += '<div style="flex:1;min-width:150px;">';
+  data.forEach(function(d){ const pct=total?Math.round(d.val/total*100):0; h+='<div style="display:flex;align-items:center;gap:7px;margin-bottom:7px;"><span style="width:11px;height:11px;border-radius:3px;background:'+d.color+';flex-shrink:0;"></span><span style="font-size:12px;flex:1;">'+d.label+'</span><span style="font-size:12px;font-weight:700;">'+d.val+'</span><span style="font-size:10.5px;color:var(--text-muted);width:36px;text-align:right;">'+pct+'%</span></div>'; });
+  h += '</div></div></div>';
+  return h;
+}
 function renderPanelKpis() {
   const m = panelMonthKey(), pm = panelPrevMonthKey();
   const now = new Date().toISOString().slice(0,7);
@@ -3047,18 +3324,19 @@ function renderPanelKpis() {
   const vcol=vsAvg>0?'#34D399':(vsAvg<0?'#FCA5A5':'#9AA9B8');
   h+='<div style="text-align:right;min-width:118px;"><div style="font-size:10.5px;color:#9AA9B8;">vs. promedio 3 meses</div><div style="font-size:23px;font-weight:800;color:'+vcol+';">'+(vsAvg>0?'+':'')+vsAvg+'%</div>'+(vsAvg>=15?'<div style="font-size:10.5px;color:#FCA5A5;font-weight:700;">Mes intenso</div>':'')+'</div>';
   h+='</div></div>';
-  const varM=[['\uD83D\uDCF1','WhatsApp','#25D366','WHATSAPP'],['\uD83D\uDCDE','Llamadas','#1E40AF','LLAMADA'],['\u2709\uFE0F','Mails','#D97706','MAIL'],['\uD83C\uDF10','Consultas Suite Web','#0891B2','SUITE_WEB'],['\uD83D\uDEE0\uFE0F','Soporte','#7C3AED','SOPORTE_GARANTIA'],['\uD83D\uDCCB','Reclamos ARG','#E4002B','RECLAMO_ARG'],['\uD83D\uDCCB','Reclamos UY','#0EA5E9','RECLAMO_UY'],['\uD83E\uDDFE','Facturas procesadas','#059669','FACTURA']];
-  h+='<div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin:4px 2px 9px;">Actividades variables</div>';
-  h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;">';
-  varM.forEach(function(k){ h+=panelKpiCard(k[0],k[1],k[2],cntMonthCount(k[3],m),cntMonthCount(k[3],pm)); });
-  h+=panelKpiCard('\uD83C\uDF93','Capacitaciones','#DB2777',panelTrainingsMonth(m),panelTrainingsMonth(pm));
-  h+=panelKpiCard('\uD83E\uDDED','Visitas','#CA8A04',panelVisitsMonth(m),panelVisitsMonth(pm));
-  h+=panelKpiCard('\uD83D\uDCCA','Encuestas','#6B7280',0,0,'m\u00f3dulo a definir');
+  const hidden = isSectionHidden('kpis');
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin:4px 2px 9px;flex-wrap:wrap;gap:8px;">';
+  h+='<div onclick="togglePanelSection(\'kpis\')" style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:6px;">'+(hidden?'\u25B8':'\u25BE')+' Mis indicadores</div>';
+  h+='<button onclick="openKpiPicker()" class="btn btn-ghost btn-sm">\uFF0B A\u00f1adir KPI</button>';
   h+='</div>';
-  h+='<div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin:15px 2px 9px;">Actividades fijas</div>';
-  h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:16px;">';
-  h+=panelKpiCard('\uD83D\uDCC4','Statement','#16181D',stId?cntMonthCount(stId,m):0,stId?cntMonthCount(stId,pm):0,stId?null:'cre\u00e1 el tipo en el cuantificador');
-  h+='</div>';
+  if(!hidden){
+    h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:16px;">';
+    getPanelKpis().forEach(function(k){ const meta=kpiMeta(k); const id=kpiId(k);
+      h+='<div style="position:relative;">'+panelKpiCard(meta.icon,meta.label,meta.color,kpiValue(k,m),kpiValue(k,pm))+'<button onclick="removePanelKpi(\''+id+'\')" title="Quitar indicador" style="position:absolute;top:5px;right:6px;background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;line-height:1;padding:2px 5px;border-radius:4px;" onmouseover="this.style.color=\'#E4002B\';this.style.background=\'#FEE2E2\'" onmouseout="this.style.color=\'var(--text-muted)\';this.style.background=\'transparent\'">\u00d7</button></div>';
+    });
+    h+='<button onclick="openKpiPicker()" style="border:1px dashed var(--border);border-radius:12px;background:transparent;cursor:pointer;color:var(--text-muted);font-size:12.5px;min-height:80px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;"><span style="font-size:20px;line-height:1;">\uFF0B</span>A\u00f1adir KPI</button>';
+    h+='</div>';
+  }
   return h;
 }
 
@@ -3089,6 +3367,9 @@ function renderPanelFilters() {
 }
 
 function renderPanelCharts() {
+  const _chHidden = isSectionHidden('charts');
+  const _chHead = '<div onclick="togglePanelSection(\'charts\')" style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin:4px 2px 10px;display:flex;align-items:center;gap:6px;">'+(_chHidden?'\u25B8':'\u25BE')+' Gr\u00e1ficos</div>';
+  if (_chHidden) return _chHead;
   const m = panelMonthKey();
   const channels=[{label:'WhatsApp',color:'#25D366',val:cntMonthCount('WHATSAPP',m)},{label:'Llamadas',color:'#1E40AF',val:cntMonthCount('LLAMADA',m)},{label:'Mails',color:'#D97706',val:cntMonthCount('MAIL',m)},{label:'Suite Web',color:'#0891B2',val:cntMonthCount('SUITE_WEB',m)},{label:'Soporte',color:'#7C3AED',val:cntMonthCount('SOPORTE_GARANTIA',m)}];
   const chTotal=channels.reduce(function(a,c){return a+c.val;},0);
@@ -3117,7 +3398,7 @@ function renderPanelCharts() {
   h+=rBar('Argentina (ARG)', rArg, '#E4002B');
   h+=rBar('Uruguay (UY)', rUy, '#0EA5E9');
   h+='</div>';
-  return h;
+  return _chHead + h;
 }
 
 function setPanelFilter(type, val){ if(type==='month')_panelFilterMonth=val; else if(type==='status')_panelFilterStatus=val; else if(type==='tag')_panelFilterTag=val; renderPanel(); }
@@ -3173,7 +3454,9 @@ function renderPanelTaskRow(t) {
   });
   if (t.evidence && t.evidence.length) h += '<span class="bdg" style="background:var(--bg-page);color:var(--text-muted);">📎 '+t.evidence.length+'</span>';
   if (t.inCalendar) h += '<span class="bdg" style="background:#FEF3C7;color:#92400E;">🗓 En calendario</span>';
-  h += '</div></div>';
+  h += '</div>';
+  if (t.conclusion) h += '<div style="margin-top:8px;font-size:11.5px;background:#F0FDF4;border-left:3px solid #047857;padding:6px 9px;border-radius:4px;color:#065F46;"><b>Conclusión:</b> '+esc(t.conclusion)+'</div>';
+  h += '</div>';
   return h;
 }
 
@@ -3181,10 +3464,15 @@ function setPanelTaskStatus(id, st) {
   const t = findPanelTask(id);
   if (!t) return;
   t.status = st;
+  if (st === 'Completado') {
+    const msg = prompt('Conclusión / mensaje de cierre (opcional):', t.conclusion || '');
+    if (msg !== null) t.conclusion = msg.trim();
+  }
   savePanelStores();
   renderPanel();
   if (t.inCalendar) renderDashboard();
 }
+function isDerivedByMe(t){ const me = panelMyZe(); return t.owner === me && (t.involved||[]).some(p => p.ze && p.ze !== me); }
 
 function renderMonthlyKpis(monthStr) { return ''; }
 
@@ -3208,13 +3496,26 @@ function openPanelTaskModal(id) {
   document.getElementById('pt-priority').value = t ? (t.priority||'Normal') : 'Normal';
   document.getElementById('pt-calendar').checked = t ? !!t.inCalendar : false;
   document.getElementById('pt-cal-time').value = t ? (t.calTime||'') : '';
+  document.getElementById('pt-conclusion').value = t ? (t.conclusion||'') : '';
   _ptInvolved = (t && Array.isArray(t.involved)) ? JSON.parse(JSON.stringify(t.involved)) : [];
   _ptTags = (t && Array.isArray(t.tags)) ? t.tags.slice() : [];
   _ptEvidence = (t && Array.isArray(t.evidence)) ? JSON.parse(JSON.stringify(t.evidence)) : [];
   document.getElementById('pt-modal-title').textContent = t ? 'Editar tarea' : 'Nueva tarea';
   ptToggleCalendar();
+  ptToggleConclusion();
   renderPtCollabOptions(); renderPtInvolved(); renderPtTags(); renderPtEvidence();
+  _ptEditIsOwner = !t || (t.owner === panelMyZe());
+  applyPtPermissions();
   document.getElementById('modal-panel-task').classList.add('active');
+}
+let _ptEditIsOwner = true;
+function applyPtPermissions(){
+  const owner = _ptEditIsOwner;
+  ['pt-name','pt-desc','pt-priority'].forEach(function(id){ const el=document.getElementById(id); if(el) el.disabled = !owner; });
+  const inv = document.getElementById('pt-involved-field'); if(inv) inv.style.display = owner ? '' : 'none';
+  const tg = document.getElementById('pt-tags-field'); if(tg) tg.style.display = owner ? '' : 'none';
+  const note = document.getElementById('pt-assignee-note'); if(note) note.style.display = owner ? 'none' : 'block';
+  ptToggleConclusion();
 }
 
 function renderPtCollabOptions() {
@@ -3277,10 +3578,22 @@ function ptToggleCalendar() {
   const on = document.getElementById('pt-calendar').checked;
   document.getElementById('pt-cal-time-wrap').style.display = on ? '' : 'none';
 }
+function ptToggleConclusion() {
+  const done = document.getElementById('pt-status').value === 'Completado';
+  const show = done || !_ptEditIsOwner;
+  document.getElementById('pt-conclusion-wrap').style.display = show ? '' : 'none';
+  const lbl = document.querySelector('#pt-conclusion-wrap label');
+  if (lbl) lbl.textContent = _ptEditIsOwner ? 'Conclusión / mensaje de cierre' : 'Comentario';
+}
 
 function savePanelTask() {
   const name = document.getElementById('pt-name').value.trim();
   if (!name) { alert('El nombre de la tarea es obligatorio.'); return; }
+  if (document.getElementById('pt-calendar').checked && !document.getElementById('pt-due').value) {
+    alert('Para que la tarea aparezca en el calendario, poné una "Fecha de cierre".');
+    document.getElementById('pt-due').focus();
+    return;
+  }
   const id = editingPanelTaskId || ('pt'+Date.now());
   const prev = editingPanelTaskId ? findPanelTask(editingPanelTaskId) : null;
   const obj = {
@@ -3295,6 +3608,7 @@ function savePanelTask() {
     evidence: _ptEvidence.slice(),
     inCalendar: document.getElementById('pt-calendar').checked,
     calTime: document.getElementById('pt-cal-time').value || '',
+    conclusion: document.getElementById('pt-conclusion').value.trim(),
     owner: prev && prev.owner ? prev.owner : (currentUser ? currentUser.ze : ''),
     createdAt: prev && prev.createdAt ? prev.createdAt : new Date().toISOString()
   };
@@ -3306,7 +3620,7 @@ function savePanelTask() {
   if (hasSystem) {
     const prevAcc = (prev && prev.acceptance) ? prev.acceptance : {};
     const acc = {};
-    obj.involved.forEach(p => { if (p.ze && p.ze !== obj.owner) acc[p.ze] = prevAcc[p.ze] || 'pending'; });
+    obj.involved.forEach(p => { if (p.ze && p.ze !== obj.owner) acc[p.ze] = prevAcc[p.ze] || 'accepted'; });
     obj.acceptance = acc;
     sharedTasks.push(obj);
   } else {
@@ -4004,6 +4318,7 @@ let pendingReclamoEstado = '';
 const RECLAMO_TYPES = ['RECLAMO_ARG','RECLAMO_UY'];
 function isReclamoType(t) { return RECLAMO_TYPES.includes(t.id); }
 function cntAdd(t) {
+  if (t.detailed) { openCntEntryFromQuick(t); return; }
   pendingCntType = t;
   pendingMotivo = '';
   pendingReclamoTipo = '';
@@ -4174,7 +4489,27 @@ function openCntEntry(id) {
   ds.value = e.dealerIdx != null ? e.dealerIdx : '';
   document.getElementById('cnt-entry-other').value = e.otherName || '';
   document.getElementById('cnt-entry-notes').value = e.notes || '';
+  // Ficha de consulta (tipos detallados)
+  const _ed = (e.ts||'').slice(0,10);
+  document.getElementById('cnt-entry-user').value = e.user || '';
+  document.getElementById('cnt-entry-respdate').value = e.respDate || _ed;
+  document.getElementById('cnt-entry-msg').value = e.msg || '';
+  document.getElementById('cnt-entry-reply').value = e.reply || '';
+  document.getElementById('cnt-entry-action').value = e.action || '';
+  document.getElementById('cnt-entry-followup').checked = !!e.followup;
+  document.getElementById('cnt-entry-followup-date').value = e.followupDate || _ed;
+  sel.onchange = cntToggleFicha;
+  cntToggleFollowup();
+  cntToggleFicha();
   document.getElementById('modal-cnt-entry').classList.add('active');
+}
+function cntToggleFicha(){
+  const tid = document.getElementById('cnt-entry-type').value;
+  const t = CNT_TYPES.find(x => x.id === tid);
+  document.getElementById('cnt-ficha').style.display = (t && t.detailed) ? 'block' : 'none';
+}
+function cntToggleFollowup(){
+  document.getElementById('cnt-followup-date-wrap').style.display = document.getElementById('cnt-entry-followup').checked ? 'block' : 'none';
 }
 function saveCntEntry() {
   const e = counterLog.find(x => String(x.id) === editingCntEntryId);
@@ -4187,6 +4522,33 @@ function saveCntEntry() {
   e.dealerIdx = di === '' ? null : parseInt(di);
   e.otherName = document.getElementById('cnt-entry-other').value.trim() || null;
   e.notes = document.getElementById('cnt-entry-notes').value;
+  const stype = CNT_TYPES.find(x => x.id === e.type);
+  if (stype && stype.detailed) {
+    e.user = document.getElementById('cnt-entry-user').value.trim();
+    e.respDate = document.getElementById('cnt-entry-respdate').value || (e.ts||'').slice(0,10);
+    e.msg = document.getElementById('cnt-entry-msg').value;
+    e.reply = document.getElementById('cnt-entry-reply').value;
+    e.action = document.getElementById('cnt-entry-action').value;
+    e.followup = document.getElementById('cnt-entry-followup').checked;
+    e.followupDate = document.getElementById('cnt-entry-followup-date').value || e.respDate;
+    const notesTxt = 'Mensaje del usuario:\n' + (e.msg||'') + '\n\nRespuesta Yamaha:\n' + (e.reply||'') + (e.action?('\n\nAcción:\n'+e.action):'');
+    if (e.followup) {
+      const title = (stype.label) + ' — ' + (e.user || 'consulta');
+      const existing = e.followActId ? activities.find(a => String(a.id) === String(e.followActId)) : null;
+      if (existing) {
+        existing.title = title; existing.date = e.followupDate; existing.due = e.followupDate; existing.notes = notesTxt;
+      } else {
+        const na = { id: Date.now()+Math.random(), title: title, type: 'Seguimiento', date: e.followupDate, time: '', duration: null, recur: 'none', status: 'Pendiente', owner: (currentUser?currentUser.ze:null), assignee: null, watchers: [], country: 'Ambos', priority: 'Media', notes: notesTxt, due: e.followupDate };
+        activities.push(na);
+        e.followActId = na.id;
+      }
+      save(STORAGE.activities, activities);
+    } else if (e.followActId) {
+      activities = activities.filter(a => String(a.id) !== String(e.followActId));
+      save(STORAGE.activities, activities);
+      e.followActId = null;
+    }
+  }
   save(STORAGE.counter, counterLog);
   closeModal('modal-cnt-entry');
   refreshCounter();
@@ -4205,7 +4567,7 @@ function openCntConfig() {
 }
 function renderCntConfig() {
   document.getElementById('cnt-config-fields').innerHTML = CNT_TYPES.map((t,i) =>
-    '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);"><input type="text" data-cfg-label="'+i+'" value="'+esc(t.label)+'" style="flex:1;"><input type="number" data-cfg-min="'+i+'" min="1" value="'+t.avgMin+'" style="width:70px;" title="Minutos promedio">'+(CNT_TYPES.length>1?'<button class="del-mini" onclick="removeCntType('+i+')">×</button>':'')+'</div>'
+    '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);"><input type="text" data-cfg-label="'+i+'" value="'+esc(t.label)+'" style="flex:1;"><input type="number" data-cfg-min="'+i+'" min="1" value="'+t.avgMin+'" style="width:70px;" title="Minutos promedio"><label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted);cursor:pointer;white-space:nowrap;" title="Abre una ficha (usuario, mensaje, respuesta, acción y seguimiento)"><input type="checkbox" data-cfg-detailed="'+i+'" '+(t.detailed?'checked':'')+' style="width:14px;height:14px;">ficha</label>'+(CNT_TYPES.length>1?'<button class="del-mini" onclick="removeCntType('+i+')">×</button>':'')+'</div>'
   ).join('') + '<div style="display:flex;gap:6px;margin-top:10px;"><input type="text" id="cnt-new-type-label" placeholder="Nueva actividad..." style="flex:1;"><input type="number" id="cnt-new-type-min" min="1" value="15" style="width:70px;" title="Min promedio"><button class="btn btn-primary btn-sm" onclick="addCntType()">+</button></div>';
 }
 function addCntType() {
@@ -4229,6 +4591,8 @@ function saveCntConfig() {
     const min = parseInt(document.querySelector('[data-cfg-min="'+i+'"]').value);
     if (lbl) t.label = lbl;
     if (min > 0) t.avgMin = min;
+    const dchk = document.querySelector('[data-cfg-detailed="'+i+'"]');
+    if (dchk) t.detailed = dchk.checked;
   });
   saveCntTypes();
   closeModal('modal-cnt-config');
@@ -4407,6 +4771,19 @@ function trainingDealerIdx(t) {
 function trainingDealerName(t) {
   const d = trainingDealer(t);
   return d ? d.n : '';
+}
+function migrateSharedTaskAcceptance() {
+  // Modelo de derivación directa: las tareas compartidas que quedaron "pendientes
+  // de aceptar" pasan a "aceptadas" para que aparezcan directo en panel y calendario.
+  let changed = false;
+  (sharedTasks || []).forEach(function(t) {
+    if (t.acceptance) {
+      Object.keys(t.acceptance).forEach(function(ze) {
+        if (t.acceptance[ze] === 'pending') { t.acceptance[ze] = 'accepted'; changed = true; }
+      });
+    }
+  });
+  if (changed) save(STORAGE.sharedTasks, sharedTasks);
 }
 function migrateTrainingDealerCodes() {
   let changed = false;
@@ -5511,56 +5888,155 @@ function saveDealer() {
   renderDealers();
 }
 
+const CASE_STAGES = [
+  {v:0,   label:'Sin relevar',  desc:'Caso recién cargado, aún sin relevar.'},
+  {v:25,  label:'Relevado',     desc:'El caso se encuentra relevado.'},
+  {v:50,  label:'En análisis',  desc:'Se está analizando.'},
+  {v:75,  label:'Conclusión',   desc:'Hay una conclusión del análisis.'},
+  {v:100, label:'Documentado',  desc:'Documentado, presentado formalmente al área y con acciones tomadas.'}
+];
+let _caseInvolved = [];
+function caseStageObj(v){ v=parseInt(v)||0; let best=CASE_STAGES[0]; CASE_STAGES.forEach(s=>{ if(v>=s.v) best=s; }); return best; }
+function caseNextNo(){
+  let max=0;
+  (cases||[]).forEach(function(c){ const m=String(c.caseNo||'').match(/(\d+)/); if(m){ const n=parseInt(m[1]); if(n>max) max=n; } });
+  return 'DA-' + String(max+1).padStart(4,'0');
+}
+function caseDealerName(code){ if(!code) return ''; const d=DEALERS.find(x=>String(x.code)===String(code)); return d?d.n:code; }
+function caseFillDealerOptions(sel){
+  const opts = ['<option value="">— sin concesionario —</option>'].concat(
+    DEALERS.slice().sort((a,b)=>String(a.n).localeCompare(String(b.n))).map(d=>'<option value="'+esc(d.code)+'">'+esc(d.n)+' ('+esc(d.code)+')</option>')
+  );
+  sel.innerHTML = opts.join('');
+}
+function caseStageChanged(){
+  const v = parseInt(document.getElementById('case-progress').value)||0;
+  document.getElementById('case-progress-bar').style.width = v+'%';
+  const st = caseStageObj(v);
+  document.getElementById('case-stage-desc').textContent = st.desc;
+}
+function caseToggleCal(){
+  document.getElementById('case-cal-fields').style.display = document.getElementById('case-calendar').checked ? '' : 'none';
+}
+function renderCaseInvolved(){
+  const box = document.getElementById('case-involved'); if(!box) return;
+  const users = getLinkableUsers();
+  if(!users.length){ box.innerHTML = '<span style="font-size:11.5px;color:var(--text-muted);">Sin miembros de equipo cargados. Vinculá tu equipo en Usuarios.</span>'; return; }
+  box.innerHTML = users.map(function(u){ const on=_caseInvolved.indexOf(u.ze)!==-1;
+    return '<label style="display:flex;align-items:center;gap:7px;padding:6px 9px;border:1px solid '+(on?'var(--primary)':'var(--border)')+';border-radius:7px;cursor:pointer;font-size:12.5px;"><input type="checkbox" '+(on?'checked':'')+' onchange="toggleCaseInvolved(\''+u.ze+'\')" style="width:14px;height:14px;">'+esc(userFullName(u))+'</label>';
+  }).join('');
+}
+function toggleCaseInvolved(ze){ const i=_caseInvolved.indexOf(ze); if(i===-1) _caseInvolved.push(ze); else _caseInvolved.splice(i,1); renderCaseInvolved(); }
+function caseKpis(){
+  const list = cases||[];
+  const pend = list.filter(c=>(c.progress||0)===0).length;
+  const fin = list.filter(c=>(c.progress||0)===100).length;
+  const act = list.filter(c=>{ const p=c.progress||0; return p>0 && p<100; }).length;
+  const cumpl = list.length ? Math.round(list.reduce((a,c)=>a+(c.progress||0),0)/list.length) : 0;
+  return {total:list.length, pend, act, fin, cumpl};
+}
 function renderCases() {
   const c = document.getElementById('cases-container');
-  if (cases.length === 0) {
-    c.innerHTML = emptyState('No hay casos cargados', 'Cargá tu primer caso de análisis de mercado');
-    return;
+  const k = caseKpis();
+  function kpi(icon,label,val,color,sub){ return '<div style="flex:1;min-width:150px;border:1px solid var(--border);border-radius:12px;padding:14px 16px;background:#fff;position:relative;overflow:hidden;"><div style="position:absolute;top:0;left:0;width:100%;height:3px;background:'+color+';"></div><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="width:30px;height:30px;border-radius:8px;background:'+color+'22;display:inline-flex;align-items:center;justify-content:center;font-size:15px;">'+icon+'</span><span style="font-size:11.5px;color:var(--text-secondary);font-weight:600;">'+label+'</span></div><div style="font-size:27px;font-weight:800;line-height:1;">'+val+'</div>'+(sub?'<div style="font-size:10.5px;color:var(--text-muted);margin-top:3px;">'+sub+'</div>':'')+'</div>'; }
+  let h = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;">';
+  h += kpi('\uD83D\uDD35','Activos',k.act,'#1E40AF','en análisis');
+  h += kpi('\u23F3','Pendientes',k.pend,'#D97706','sin relevar');
+  h += kpi('\u2705','Finalizados',k.fin,'#047857','documentados');
+  h += '<div style="flex:1;min-width:170px;border:1px solid var(--border);border-radius:12px;padding:14px 16px;background:linear-gradient(135deg,#16181D,#27313C);color:#fff;"><div style="font-size:11.5px;color:#9AA9B8;font-weight:600;margin-bottom:8px;">% de cumplimiento general</div><div style="font-size:30px;font-weight:800;line-height:1;">'+k.cumpl+'%</div><div class="progress" style="margin-top:8px;height:7px;background:rgba(255,255,255,.15);"><div class="progress-bar" style="width:'+k.cumpl+'%;background:#34D399;"></div></div></div>';
+  h += '</div>';
+  if (!cases.length) {
+    h += emptyState('No hay casos cargados', 'Cargá tu primer caso con "+ Nuevo caso"');
+    c.innerHTML = h; return;
   }
-  c.innerHTML = '<table class="tbl"><thead><tr><th>Caso</th><th>Origen</th><th>Estado</th><th style="width:140px;">Avance</th><th>Tiempo</th><th>Evidencia</th><th></th></tr></thead><tbody>' +
-    cases.map(c => {
-      const sb = c.status === 'Cerrado' ? 'bdg-done' : c.status === 'Derivado' ? 'bdg-prog' : 'bdg-pend';
+  const ordered = cases.slice().sort((a,b)=>String(b.caseNo||'').localeCompare(String(a.caseNo||'')));
+  h += '<table class="tbl"><thead><tr><th>N° caso</th><th>Modelo</th><th>Origen</th><th>Concesionario</th><th>Estado</th><th style="width:150px;">Avance</th><th>Tiempo</th><th>Evidencia</th><th></th></tr></thead><tbody>' +
+    ordered.map(function(c){
+      const sb = c.status === 'Cerrado' ? 'bdg-done' : c.status === 'Derivado' ? 'bdg-prog' : c.status === 'En análisis' ? 'bdg-prog' : 'bdg-pend';
       const ev = c.evidence ? '<a href="'+esc(c.evidence)+'" target="_blank" rel="noopener" style="color:var(--primary);text-decoration:none;font-weight:600;">↗ Ver</a>' : '<span style="color:var(--text-muted);">—</span>';
       const tm = c.time ? fmtHM(c.time) : '<span style="color:var(--text-muted);">—</span>';
-      return '<tr><td><div style="font-weight:600;">'+esc(c.title)+'</div>'+(c.cause?'<div style="font-size:11.5px;color:var(--text-muted);margin-top:2px;">Causa: '+esc(c.cause.slice(0,60))+'</div>':'')+'</td><td>'+esc(c.origin)+'</td><td><span class="bdg '+sb+'">'+esc(c.status)+'</span></td><td><div class="progress"><div class="progress-bar" style="width:'+(c.progress||0)+'%"></div></div><div style="font-size:11px;color:var(--text-muted);margin-top:3px;">'+(c.progress||0)+'%</div></td><td style="font-size:12.5px;">'+tm+'</td><td>'+ev+'</td><td><button class="btn btn-ghost btn-icon" onclick="openCaseModal(\''+c.id+'\')">✎</button></td></tr>';
+      const dn = c.dealerCode ? esc(caseDealerName(c.dealerCode)) : '<span style="color:var(--text-muted);">—</span>';
+      const prog = c.progress||0;
+      const pc = prog===100 ? '#047857' : prog>0 ? '#1E40AF' : '#D97706';
+      return '<tr><td style="font-weight:700;color:var(--primary);white-space:nowrap;">'+esc(c.caseNo||'—')+'</td>'+
+        '<td><div style="font-weight:600;">'+esc(c.model||c.title||'—')+'</div>'+(c.description?'<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">'+esc(String(c.description).slice(0,55))+(String(c.description).length>55?'…':'')+'</div>':'')+'</td>'+
+        '<td style="font-size:12.5px;">'+esc(c.origin||'—')+'</td>'+
+        '<td style="font-size:12.5px;">'+dn+'</td>'+
+        '<td><span class="bdg '+sb+'">'+esc(c.status||'—')+'</span></td>'+
+        '<td><div class="progress" style="height:7px;"><div class="progress-bar" style="width:'+prog+'%;background:'+pc+';"></div></div><div style="font-size:11px;color:var(--text-muted);margin-top:3px;">'+prog+'% · '+esc(caseStageObj(prog).label)+'</div></td>'+
+        '<td style="font-size:12.5px;white-space:nowrap;">'+tm+'</td>'+
+        '<td>'+ev+'</td>'+
+        '<td><button class="btn btn-ghost btn-icon" onclick="openCaseModal(\''+c.id+'\')">✎</button></td></tr>';
     }).join('') + '</tbody></table>';
+  c.innerHTML = h;
 }
 function openCaseModal(id) {
   editingCaseId = id || null;
   document.getElementById('case-modal-title').textContent = id ? 'Editar caso' : 'Nuevo caso';
   document.getElementById('case-delete-btn').style.display = id ? 'inline-flex' : 'none';
-  const c = id ? cases.find(x => x.id === id) : {title:'',origin:'Ensamble',status:'Abierto',areas:'',cause:'',progress:0,time:'',evidence:'',notes:''};
-  document.getElementById('case-title').value = c.title;
-  document.getElementById('case-origin').value = c.origin;
-  document.getElementById('case-status').value = c.status;
-  document.getElementById('case-areas').value = c.areas || '';
-  document.getElementById('case-cause').value = c.cause || '';
-  document.getElementById('case-progress').value = c.progress || 0;
-  document.getElementById('case-progress-val').textContent = c.progress || 0;
-  document.getElementById('case-time').value = c.time || '';
-  document.getElementById('case-evidence').value = c.evidence || '';
-  document.getElementById('case-notes').value = c.notes || '';
+  const c = id ? cases.find(x => x.id === id) : null;
+  caseFillDealerOptions(document.getElementById('case-dealer'));
+  document.getElementById('case-no').value = c ? (c.caseNo||caseNextNo()) : caseNextNo();
+  document.getElementById('case-model').value = c ? (c.model||c.title||'') : '';
+  document.getElementById('case-origin').value = c ? (c.origin||'Ensamble') : 'Ensamble';
+  document.getElementById('case-dealer').value = c ? (c.dealerCode||'') : '';
+  document.getElementById('case-desc').value = c ? (c.description||'') : '';
+  document.getElementById('case-status').value = c ? (c.status||'Abierto') : 'Abierto';
+  document.getElementById('case-time').value = c ? (c.time||'') : '';
+  document.getElementById('case-progress').value = c ? (c.progress||0) : 0;
+  document.getElementById('case-evidence').value = c ? (c.evidence||'') : '';
+  document.getElementById('case-areas').value = c ? (c.areas||'') : '';
+  document.getElementById('case-notes').value = c ? (c.notes||'') : '';
+  // Analista: quien inició (se fija al crear)
+  const analystZe = c ? (c.analystZe || (currentUser?currentUser.ze:'')) : (currentUser?currentUser.ze:'');
+  const au = findUserByZE(analystZe);
+  document.getElementById('case-analyst').value = c && c.analystName ? c.analystName : (au ? userFullName(au) : (currentUser?(currentUser.firstname+' '+(currentUser.lastname||'')).trim():'—'));
+  document.getElementById('case-analyst').dataset.ze = analystZe || '';
+  _caseInvolved = c && Array.isArray(c.involved) ? c.involved.slice() : [];
+  renderCaseInvolved();
+  document.getElementById('case-calendar').checked = c ? !!c.inCalendar : false;
+  document.getElementById('case-due').value = c ? (c.dueDate||'') : '';
+  document.getElementById('case-caltime').value = c ? (c.calTime||'') : '';
+  caseToggleCal();
+  caseStageChanged();
   document.getElementById('modal-case').classList.add('active');
 }
 function saveCase() {
-  const title = document.getElementById('case-title').value.trim();
-  if (!title) { alert('Título obligatorio'); return; }
+  const model = document.getElementById('case-model').value.trim();
+  if (!model) { alert('El nombre del modelo es obligatorio.'); return; }
+  const desc = document.getElementById('case-desc').value.trim();
+  if (!desc) { alert('La descripción del caso es obligatoria.'); return; }
+  if (document.getElementById('case-calendar').checked && !document.getElementById('case-due').value) {
+    alert('Para agregar al calendario, poné una fecha.'); document.getElementById('case-due').focus(); return;
+  }
+  const prev = editingCaseId ? cases.find(c=>c.id===editingCaseId) : null;
   const obj = {
     id: editingCaseId || ('c'+Date.now()),
-    title, origin: document.getElementById('case-origin').value,
+    caseNo: document.getElementById('case-no').value || caseNextNo(),
+    model: model,
+    origin: document.getElementById('case-origin').value,
+    dealerCode: document.getElementById('case-dealer').value,
+    description: desc,
     status: document.getElementById('case-status').value,
-    areas: document.getElementById('case-areas').value,
-    cause: document.getElementById('case-cause').value,
-    progress: parseInt(document.getElementById('case-progress').value),
+    progress: parseInt(document.getElementById('case-progress').value)||0,
     time: parseInt(document.getElementById('case-time').value) || 0,
     evidence: document.getElementById('case-evidence').value,
+    areas: document.getElementById('case-areas').value,
     notes: document.getElementById('case-notes').value,
-    createdAt: editingCaseId ? cases.find(c=>c.id===editingCaseId).createdAt : new Date().toISOString()
+    analystZe: document.getElementById('case-analyst').dataset.ze || (currentUser?currentUser.ze:''),
+    analystName: document.getElementById('case-analyst').value,
+    involved: _caseInvolved.slice(),
+    inCalendar: document.getElementById('case-calendar').checked,
+    dueDate: document.getElementById('case-due').value,
+    calTime: document.getElementById('case-caltime').value,
+    owner: prev ? (prev.owner || (currentUser?currentUser.ze:'')) : (currentUser?currentUser.ze:''),
+    createdAt: prev ? prev.createdAt : new Date().toISOString()
   };
   if (editingCaseId) cases = cases.map(c => c.id === editingCaseId ? obj : c);
   else cases.push(obj);
   save(STORAGE.cases, cases);
   closeModal('modal-case'); renderCases();
+  if (document.getElementById('page-dashboard').classList.contains('active')) renderDashboard();
 }
 function deleteCase() { if (!confirm('¿Eliminar caso?')) return; cases = cases.filter(c => c.id !== editingCaseId); save(STORAGE.cases, cases); closeModal('modal-case'); renderCases(); }
 
@@ -6774,20 +7250,53 @@ function evdScoreMapForMonth(month){
   groups.forEach(function(g){ if (g.dno) map[g.dno] = evdScore(g).score; });
   return map;
 }
+function evdRecallMap(){
+  // Nro concesionario -> {assigned, serviced} across all recalls
+  const m = {};
+  (recalls||[]).forEach(function(r){
+    (r.units||[]).forEach(function(u){
+      const cc = normDealerCode(u.assignedCode || u.dealerCode || '');
+      if (!cc) return;
+      if (!m[cc]) m[cc] = {assigned:0, serviced:0};
+      m[cc].assigned++;
+      if (u.serviced) m[cc].serviced++;
+    });
+  });
+  return m;
+}
+function evdRecallValue(code, recallMap){
+  const rm = recallMap[code];
+  if (!rm || rm.assigned===0) return 'sin datos';   // no tiene unidades de recall asignadas
+  const ratio = rm.serviced / rm.assigned;
+  return ratio>=0.9 ? 2 : (ratio>=0.5 ? 1 : 0);      // 2=cumple / 1=parcial / 0=no realiza
+}
 function evdExportResultados(){
   const califMap = evdCalifMapForPeriod();
+  const recallMap = evdRecallMap();
   const wb = XLSX.utils.book_new();
-  ['Motos','Marina'].forEach(function(seg){
-    const list = (DEALERS||[]).filter(function(d){ return d.code && evdSegMatch(d, seg); });
+  const segments = [
+    {sheet:'Motos YMARG',  seg:'Motos',  org:'YMARG'},
+    {sheet:'Marina YMARG', seg:'Marina', org:'YMARG'},
+    {sheet:'YMUY',         seg:null,     org:'YMUY'}
+  ];
+  segments.forEach(function(cfg){
+    const list = (DEALERS||[]).filter(function(d){
+      if (!d.code) return false;
+      if (String(d.o||'').toUpperCase() !== cfg.org) return false;
+      if (cfg.seg && !evdSegMatch(d, cfg.seg)) return false;
+      return true;
+    });
     list.sort(function(a,b){ return (b.priority?1:0)-(a.priority?1:0) || String(a.n).localeCompare(String(b.n)); });
     const aoa = [['NOMBRE CONCESIONARIO','Nro Dlr','Prioritarios','Reclamos (41)','Recall (42)','Guarda (43)','Responsable (44)']];
     list.forEach(function(d){
       const code = normDealerCode(d.code);
-      aoa.push([d.n, code, d.priority?'SI':'NO', (califMap[code]!==undefined?califMap[code]:''), '', '', '']);
+      const recl = (califMap[code]!==undefined) ? califMap[code] : 'sin datos';
+      const rec  = evdRecallValue(code, recallMap);
+      aoa.push([d.n, code, d.priority?'SI':'NO', recl, rec, '', '']);
     });
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     ws['!cols'] = [{wch:40},{wch:10},{wch:11},{wch:12},{wch:11},{wch:11},{wch:14}];
-    XLSX.utils.book_append_sheet(wb, ws, seg);
+    XLSX.utils.book_append_sheet(wb, ws, cfg.sheet);
   });
   const fname = sanitizeFileName('Analisis de desempeño - Garantías - ' + evdRangeLabel()) + '.xlsx';
   XLSX.writeFile(wb, fname);
@@ -10366,10 +10875,30 @@ function openUserModal(ze) {
   Object.keys(ROLES).forEach(k => {
     const r = ROLES[k];
     const checked = u && u.areas && u.areas.indexOf(k) !== -1;
-    h += '<label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:13px;"><input type="checkbox" value="'+k+'" '+(checked?'checked':'')+' style="width:15px;height:15px;"><span style="display:flex;align-items:center;gap:6px;"><span style="width:20px;height:20px;border-radius:50%;background:'+r.color+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">'+r.av+'</span>'+r.label+'</span></label>';
+    h += '<label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:13px;"><input type="checkbox" value="'+k+'" '+(checked?'checked':'')+' onchange="renderUmPages()" style="width:15px;height:15px;"><span style="display:flex;align-items:center;gap:6px;"><span style="width:20px;height:20px;border-radius:50%;background:'+r.color+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">'+r.av+'</span>'+r.label+'</span></label>';
   });
   box.innerHTML = h;
+  _umPages = (u && Array.isArray(u.pages)) ? u.pages.slice() : [];
+  renderUmPages();
   document.getElementById('modal-user').classList.add('active');
+}
+let _umPages = [];
+function umAvailablePages() {
+  const areas = Array.from(document.querySelectorAll('#um-areas input:checked')).map(el => el.value);
+  const seen = {}, out = [];
+  areas.forEach(a => (ROLE_PAGES[a] || []).forEach(p => { if (!seen[p]) { seen[p]=1; out.push(p); } }));
+  return out;
+}
+function renderUmPages() {
+  const box = document.getElementById('um-pages'); if (!box) return;
+  const avail = umAvailablePages();
+  if (!avail.length) { box.innerHTML = '<span style="font-size:11.5px;color:var(--text-muted);">Elegí un área primero.</span>'; return; }
+  // Sin restricción guardada (pages vacío) = todos visibles.
+  const full = !(_umPages && _umPages.length);
+  box.innerHTML = avail.map(function(p){
+    const on = full || _umPages.indexOf(p) !== -1;
+    return '<label style="display:flex;align-items:center;gap:7px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12.5px;"><input type="checkbox" data-page-perm="'+p+'" '+(on?'checked':'')+' style="width:14px;height:14px;">'+esc(PAGE_LABELS[p]||p)+'</label>';
+  }).join('');
 }
 
 let _umTeam = [];
@@ -10430,9 +10959,12 @@ function saveUser() {
   if (!email) { alert('El email es obligatorio: tiene que coincidir con el de la invitación en Supabase, porque es lo que vincula al usuario con su acceso.'); return; }
   const areas = Array.from(document.querySelectorAll('#um-areas input:checked')).map(el => el.value);
   if (areas.length === 0) { alert('Asigná al menos un área'); return; }
+  const availPages = umAvailablePages();
+  const checkedPages = Array.from(document.querySelectorAll('#um-pages input:checked')).map(el => el.getAttribute('data-page-perm'));
+  const pages = (checkedPages.length >= availPages.length) ? [] : checkedPages; // todos = acceso completo
   const hasTeam = document.getElementById('um-has-team').value === 'si';
   const userData = {
-    ze, firstname, lastname, pin, areas,
+    ze, firstname, lastname, pin, areas, pages,
     dept: document.getElementById('um-dept').value.trim(),
     cargo: document.getElementById('um-cargo').value.trim(),
     email: document.getElementById('um-email').value.trim(),
@@ -10832,6 +11364,7 @@ if (!window.__YNET_CLOUD) { initApp(); }
     auth: { storage: sessionStore, persistSession: true, autoRefreshToken: true }
   });
   window.__sb = sb;
+  window.__ynetApplyRemote = function(k, v){ try { _origSet(k, v); } catch(e){} try { _meta[k] = new Date().toISOString(); _saveMeta(); } catch(e){} };
 
   // Token de sesión cacheado (para el guardado de emergencia sincrónico al cerrar)
   let _accessToken = null;
@@ -10912,6 +11445,13 @@ if (!window.__YNET_CLOUD) { initApp(); }
     (data||[]).forEach(row => {
       if (!isSharedKey(row.k)) return;
       cloudKeys[row.k] = true;
+      // Claves colaborativas globales: la nube manda siempre, así una copia local
+      // desactualizada no bloquea las tareas que otro usuario derivó/compartió.
+      if (row.k === 'gg_shared_tasks_v1') {
+        try { _origSet(row.k, row.v); } catch(e){}
+        _meta[row.k] = row.updated_at || new Date().toISOString();
+        return;
+      }
       const localTs = _meta[row.k];
       if (!localTs || _tsMs(row.updated_at) >= _tsMs(localTs)) {
         // La nube es más nueva (o no hay marca local): aplicar nube
