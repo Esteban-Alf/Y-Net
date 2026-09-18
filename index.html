@@ -393,7 +393,7 @@ textarea{resize:vertical;min-height:60px;}
   <div style="padding:12px 16px;text-align:center;">
       <div style="font-size:13px;font-weight:700;color:#fff;letter-spacing:0.08em;">Y-Net</div>
       <div style="font-size:9px;color:rgba(255,255,255,0.5);letter-spacing:0.03em;margin-top:2px;">Warranty Operations Platform</div>
-      <div id="app-version-stamp" style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:3px;">v2026.07.17-t</div>
+      <div id="app-version-stamp" style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:3px;">v2026.07.17-u</div>
     </div>
 </aside>
 
@@ -2686,7 +2686,7 @@ function renderCalendar() {
   document.getElementById('cal-selected-info').textContent = acts.length === 0 ? 'Sin actividades' : acts.length+' actividad'+(acts.length>1?'es':'');
 }
 
-const APP_VERSION = 'v2026.07.17-t';
+const APP_VERSION = 'v2026.07.17-u';
 function paintVersionStamp(){ const el = document.getElementById('app-version-stamp'); if (el) el.textContent = APP_VERSION; }
 function openDayEntry(id) {
   // Las entradas del día pueden ser actividades reales o virtuales
@@ -5971,7 +5971,7 @@ function renderAccountPanel(d){
   function kpi(icon,label,val,color,sub){ return '<div style="flex:1;min-width:140px;border:1px solid var(--border);border-radius:12px;padding:14px 16px;background:#fff;position:relative;overflow:hidden;"><div style="position:absolute;top:0;left:0;width:100%;height:3px;background:'+color+';"></div><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="width:30px;height:30px;border-radius:8px;background:'+color+'22;display:inline-flex;align-items:center;justify-content:center;font-size:15px;">'+icon+'</span><span style="font-size:11.5px;color:var(--text-secondary);font-weight:600;">'+label+'</span></div><div style="font-size:27px;font-weight:800;line-height:1;">'+val+'</div>'+(sub?'<div style="font-size:10.5px;color:var(--text-muted);margin-top:3px;">'+sub+'</div>':'')+'</div>'; }
   function gauge(label,pct,color,sub){ return '<div style="flex:1;min-width:210px;border:1px solid var(--border);border-radius:12px;padding:16px 18px;background:#fff;"><div style="font-size:12px;color:var(--text-secondary);font-weight:600;margin-bottom:8px;">'+label+'</div><div style="display:flex;align-items:flex-end;gap:10px;"><div style="font-size:34px;font-weight:800;line-height:1;color:'+color+';">'+pct+'%</div><div style="font-size:11px;color:var(--text-muted);padding-bottom:5px;">'+sub+'</div></div><div class="progress" style="margin-top:10px;height:9px;"><div class="progress-bar" style="width:'+pct+'%;background:'+color+';"></div></div></div>'; }
   const dt=d.updatedAt?new Date(d.updatedAt):null;
-  let h='<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px;"><div><div style="font-size:18px;font-weight:800;">'+esc(d.dealerName||d.code)+'</div><div style="font-size:11.5px;color:var(--text-muted);">'+esc(d.code)+(dt?' \u00b7 actualizado '+dt.toLocaleDateString('es-AR')+' '+dt.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}):'')+(d.fileName?' \u00b7 '+esc(d.fileName):'')+'</div></div><div style="display:flex;gap:8px;flex-wrap:wrap;" class="acct-actions"><button class="btn btn-ghost btn-sm" onclick="exportAccountPdf()">\u2193 Exportar PDF</button><button class="btn btn-primary btn-sm" onclick="sendAccountReport()">\u2709 Enviar informe</button></div></div>';
+  let h='<div class="acct-panel-head" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px;"><div><div style="font-size:18px;font-weight:800;">'+esc(d.dealerName||d.code)+'</div><div style="font-size:11.5px;color:var(--text-muted);">'+esc(d.code)+(dt?' \u00b7 actualizado '+dt.toLocaleDateString('es-AR')+' '+dt.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}):'')+(d.fileName?' \u00b7 '+esc(d.fileName):'')+'</div></div><div style="display:flex;gap:8px;flex-wrap:wrap;" class="acct-actions"><button class="btn btn-ghost btn-sm" onclick="exportAccountPdf()">\u2193 Exportar PDF</button><button class="btn btn-primary btn-sm" onclick="sendAccountReport()">\u2709 Enviar informe</button></div></div>';
   h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;">';
   h+=kpi('\uD83D\uDCCB','Reclamos',d.total,'#16181D','total');
   h+=kpi('\u2705','Aprobados',d.aprob,'#047857','');
@@ -6009,17 +6009,18 @@ function dealerEmail(code){
 }
 function acctReportBody(d){
   const dt = d.updatedAt ? new Date(d.updatedAt) : new Date();
+  const _logoEl = document.querySelector('.sb-logo img');
+  const _logoSrc = _logoEl ? _logoEl.src : '';
   let h = '<div style="max-width:840px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#16181D;">';
-  h += '<div style="border-bottom:3px solid #E4002B;padding-bottom:10px;margin-bottom:18px;"><div style="font-size:22px;font-weight:800;">Estado de cuenta — Garantías</div><div style="font-size:13px;color:#6B7280;margin-top:2px;">'+esc(d.dealerName||d.code)+' · '+esc(d.code)+' · '+dt.toLocaleDateString('es-AR')+'</div></div>';
+  h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:3px solid #E4002B;padding-bottom:12px;margin-bottom:18px;"><div><div style="font-size:22px;font-weight:800;">Informe de análisis en Garantías</div><div style="font-size:13px;color:#6B7280;margin-top:3px;">'+esc(d.dealerName||d.code)+' · '+esc(d.code)+' · '+dt.toLocaleDateString('es-AR')+'</div></div>'+(_logoSrc?'<img src="'+_logoSrc+'" alt="Yamaha" style="height:46px;width:auto;flex-shrink:0;">':'')+'</div>';
   h += renderAccountPanel(d);
-  h += '<div style="margin-top:22px;font-size:11px;color:#9AA0A8;border-top:1px solid #E5E7EB;padding-top:10px;">Informe generado por Y-Net · Yamaha Motor Argentina / Uruguay</div>';
   h += '</div>';
   return h;
 }
 function _acctPrintWindow(d){
   const w = window.open('', '_blank');
   if(!w){ alert('Habilitá las ventanas emergentes para exportar/enviar el informe.'); return null; }
-  const styles = '<style>:root{--text-muted:#9AA0A8;--text-secondary:#4B5563;--border:#E5E7EB;--primary:#E4002B;--bg-page:#F3F4F6;--text:#16181D;}body{padding:24px;background:#fff;margin:0;}.card{border:1px solid #E5E7EB;border-radius:12px;padding:14px 16px;background:#fff;margin-bottom:14px;}.card-h{margin-bottom:10px;}.card-title{font-size:14px;font-weight:700;}.card-sub{font-size:11px;color:#9AA0A8;}.progress{background:#F1F2F4;border-radius:8px;overflow:hidden;height:9px;}.progress-bar{height:100%;border-radius:8px;background:#E4002B;}.acct-actions{display:none !important;}@media print{.noprint{display:none;}}</style>';
+  const styles = '<style>:root{--text-muted:#9AA0A8;--text-secondary:#4B5563;--border:#E5E7EB;--primary:#E4002B;--bg-page:#F3F4F6;--text:#16181D;}body{padding:24px;background:#fff;margin:0;}.card{border:1px solid #E5E7EB;border-radius:12px;padding:14px 16px;background:#fff;margin-bottom:14px;}.card-h{margin-bottom:10px;}.card-title{font-size:14px;font-weight:700;}.card-sub{font-size:11px;color:#9AA0A8;}.progress{background:#F1F2F4;border-radius:8px;overflow:hidden;height:9px;}.progress-bar{height:100%;border-radius:8px;background:#E4002B;}.acct-actions{display:none !important;}.acct-panel-head{display:none !important;}@media print{.noprint{display:none;}}</style>';
   w.document.write('<html><head><meta charset="UTF-8"><title>Estado de cuenta - '+esc(d.dealerName||d.code)+'</title>'+styles+'</head><body>'+acctReportBody(d)+'<div class="noprint" style="margin-top:24px;text-align:center;"><button onclick="window.print()" style="padding:11px 22px;background:#E4002B;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">🖨️ Imprimir / Guardar PDF</button></div></body></html>');
   w.document.close();
   return w;
