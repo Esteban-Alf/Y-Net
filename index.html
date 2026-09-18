@@ -368,6 +368,7 @@ textarea{resize:vertical;min-height:60px;}
     <div class="nav-item" data-page="analisis"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg> Desarrollo de Actividades</div>
     <div class="nav-item" data-page="recall"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg> Recall</div>
     <div class="nav-item" data-page="evaldlr"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></svg> Evaluación Dlr</div>
+    <div class="nav-item" data-page="cuenta"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg> Estado de cuenta</div>
     <div class="nav-item" data-page="viajes"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12l3-9 6 6 6-6 3 9-3 9-6-6-6 6z"/></svg> Viajes</div>
     <div class="nav-item" data-page="capacitaciones"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5a6 3 0 0 0 12 0v-5"/></svg> Capacitaciones</div>
 
@@ -392,7 +393,7 @@ textarea{resize:vertical;min-height:60px;}
   <div style="padding:12px 16px;text-align:center;">
       <div style="font-size:13px;font-weight:700;color:#fff;letter-spacing:0.08em;">Y-Net</div>
       <div style="font-size:9px;color:rgba(255,255,255,0.5);letter-spacing:0.03em;margin-top:2px;">Warranty Operations Platform</div>
-      <div id="app-version-stamp" style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:3px;">v2026.07.17-r</div>
+      <div id="app-version-stamp" style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:3px;">v2026.07.17-s</div>
     </div>
 </aside>
 
@@ -555,6 +556,18 @@ textarea{resize:vertical;min-height:60px;}
       </div>
     </div>
     <div class="content"><div id="evaldlr-container"></div></div>
+  </div>
+
+  <!-- ESTADO DE CUENTA -->
+  <div class="page" id="page-cuenta">
+    <div class="ph">
+      <div><div class="ph-title">Estado de cuenta</div><div class="ph-sub">Análisis de reclamos por concesionario</div></div>
+      <div class="ph-actions">
+        <button class="btn btn-primary" id="acct-import-btn" onclick="triggerAcctImport()">↑ Subir Excel</button>
+        <input type="file" id="acct-file" accept=".xlsx,.xls" style="display:none;" onchange="importAccountExcel(this)">
+      </div>
+    </div>
+    <div class="content"><div id="cuenta-container"></div></div>
   </div>
 
   <!-- VISITAS -->
@@ -1668,7 +1681,7 @@ function findUserByZE(ze) {
   return users.find(u => (u.ze||'').toUpperCase() === (ze||'').toUpperCase());
 }
 const DEFAULT_ROLE_PAGES = {
-  garantias:      ['dashboard','panel','contador','concesionarios','analisis','recall','evaldlr','viajes','capacitaciones','biblioteca'],
+  garantias:      ['dashboard','panel','contador','concesionarios','analisis','recall','evaldlr','cuenta','viajes','capacitaciones','biblioteca'],
   tecnica:        ['dashboard','panel','contador','concesionarios','viajes','capacitaciones','biblioteca'],
   repuestos:      ['dashboard','panel','contador','concesionarios','viajes','capacitaciones','biblioteca'],
   comercial:      ['dashboard','panel','contador','concesionarios','viajes','capacitaciones','biblioteca'],
@@ -1676,7 +1689,8 @@ const DEFAULT_ROLE_PAGES = {
   admin:          ['admin-panel','soporte','usuarios','areas','comunicados']
 };
 let ROLE_PAGES = JSON.parse(localStorage.getItem('gg_role_pages_v1') || 'null') || JSON.parse(JSON.stringify(DEFAULT_ROLE_PAGES));
-const PAGE_LABELS = { dashboard:'Dashboard', panel:'Panel de control', contador:'Cuantificador', concesionarios:'Concesionarios', analisis:'Desarrollo de Actividades', recall:'Recall', evaldlr:'Evaluación Dlr', viajes:'Viajes', capacitaciones:'Capacitaciones', biblioteca:'Biblioteca', usuarios:'Usuarios' };
+const PAGE_LABELS = { dashboard:'Dashboard', panel:'Panel de control', contador:'Cuantificador', concesionarios:'Concesionarios', analisis:'Desarrollo de Actividades', recall:'Recall', evaldlr:'Evaluación Dlr', cuenta:'Estado de cuenta', viajes:'Viajes', capacitaciones:'Capacitaciones', biblioteca:'Biblioteca', usuarios:'Usuarios' };
+try { Object.keys(ROLE_PAGES).forEach(function(r){ if(ROLE_PAGES[r] && ROLE_PAGES[r].indexOf('evaldlr')!==-1 && ROLE_PAGES[r].indexOf('cuenta')===-1){ ROLE_PAGES[r].splice(ROLE_PAGES[r].indexOf('evaldlr')+1,0,'cuenta'); } }); localStorage.setItem('gg_role_pages_v1', JSON.stringify(ROLE_PAGES)); } catch(e){}
 // El administrador siempre ve todos los módulos de gestión.
 ROLE_PAGES.admin = ['admin-panel','soporte','usuarios','areas','comunicados'];
 function saveRolePages() { localStorage.setItem('gg_role_pages_v1', JSON.stringify(ROLE_PAGES)); }
@@ -1809,6 +1823,7 @@ function reloadRoleScopedState() {
   _notifs = load(STORAGE.notifs) || [];
   panelKpis = load(STORAGE.panelKpis) || [];
   panelLayout = load(STORAGE.panelLayout) || {};
+  accountStatus = load(STORAGE.accountStatus) || {};
   try { const _firstRun = !_notifs.length; generateNotifs(_firstRun); } catch(e){}
   try { startLiveSync(); } catch(e){}
   if (!panelTags || panelTags.length === 0) { panelTags = DEFAULT_PANEL_TAGS.slice(); save(STORAGE.panelTags, panelTags); }
@@ -2229,7 +2244,8 @@ const STORAGE = {
   sharedTasks: 'gg_shared_tasks_v1',
   notifs: 'gg_notifications_v1',
   panelKpis: 'gg_panel_kpis_v1',
-  panelLayout: 'gg_panel_layout_v1'
+  panelLayout: 'gg_panel_layout_v1',
+  accountStatus: 'gg_account_status_v1'
 };
 // Claves cuyos datos son PERSONALES (scope por usuario / ZE). El resto es compartido.
 // Compartidos: Concesionarios, Recall, Capacitaciones y Biblioteca.
@@ -2330,6 +2346,7 @@ let sharedTasks = load(STORAGE.sharedTasks);
 let _notifs = load(STORAGE.notifs) || [];
 let panelKpis = load(STORAGE.panelKpis) || [];
 let panelLayout = load(STORAGE.panelLayout) || {};
+let accountStatus = load(STORAGE.accountStatus) || {};
 let _sharedTasksRaw = null;
 let _liveSyncStarted = false;
 function saveSupportChats() { localStorage.setItem('gg_support_chats_v1', JSON.stringify(supportChats)); }
@@ -2445,6 +2462,7 @@ document.querySelectorAll('.nav-item').forEach(el => {
     if (page === 'analisis') renderCases();
     if (page === 'recall') renderRecalls();
     if (page === 'evaldlr') renderEvalDlr();
+    if (page === 'cuenta') renderAccountStatus();
     if (page === 'viajes') renderTrips();
     if (page === 'capacitaciones') renderTrainings();
     if (page === 'biblioteca') renderLibrary();
@@ -2668,7 +2686,7 @@ function renderCalendar() {
   document.getElementById('cal-selected-info').textContent = acts.length === 0 ? 'Sin actividades' : acts.length+' actividad'+(acts.length>1?'es':'');
 }
 
-const APP_VERSION = 'v2026.07.17-r';
+const APP_VERSION = 'v2026.07.17-s';
 function paintVersionStamp(){ const el = document.getElementById('app-version-stamp'); if (el) el.textContent = APP_VERSION; }
 function openDayEntry(id) {
   // Las entradas del día pueden ser actividades reales o virtuales
@@ -5888,6 +5906,99 @@ function saveDealer() {
   renderDealers();
 }
 
+let _acctDealer = '';
+function triggerAcctImport(){ if(!_acctDealer){ alert('Elegí un concesionario primero.'); return; } const f=document.getElementById('acct-file'); if(f) f.click(); }
+function importAccountExcel(input){
+  if(!_acctDealer){ alert('Elegí un concesionario primero.'); input.value=''; return; }
+  const file=input.files&&input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      if(rows.length<2){ alert('El Excel no tiene datos.'); input.value=''; return; }
+      const hdr=rows[0].map(function(h){return String(h).trim().toLowerCase();});
+      function col(names, fallback){ for(var i=0;i<names.length;i++){ var j=hdr.indexOf(names[i]); if(j!==-1) return j; } return fallback; }
+      const iConc = col(['concesionario n\u00b0','concesionario n\u00ba','concesionario','nro concesionario'], 0);
+      const iTipo = col(['tipo de reclamo','tipo'], 8);
+      const iEstado = col(['estado de aprobaci\u00f3n de garant\u00eda','estado de aprobacion de garantia','estado de aprobaci\u00f3n','estado de aprobacion'], 12);
+      const iFactura = col(['n\u00b0 factura','n\u00ba factura','n factura','factura'], 17);
+      const target = normDealerCode(_acctDealer);
+      let total=0,aprob=0,rech=0,pend=0,fact=0,sinFact=0; const byType={};
+      for(let r=1;r<rows.length;r++){
+        const row=rows[r]; if(!row) continue;
+        const conc = normDealerCode(String(row[iConc]==null?'':row[iConc]).trim());
+        const estado = String(row[iEstado]==null?'':row[iEstado]).trim();
+        const tipo = String(row[iTipo]==null?'':row[iTipo]).trim();
+        const factura = String(row[iFactura]==null?'':row[iFactura]).trim();
+        if(!conc && !estado && !tipo) continue;
+        if(conc && conc!==target) continue;
+        total++;
+        const isAprob=/aprob/i.test(estado);
+        const isRech=/rechaz|anul|denegad|no aprob/i.test(estado);
+        if(isAprob){ aprob++; if(factura) fact++; else sinFact++; }
+        else if(isRech) rech++;
+        else pend++;
+        if(tipo){ byType[tipo]=(byType[tipo]||0)+1; }
+      }
+      if(total===0){ alert('No encontr\u00e9 filas del concesionario '+_acctDealer+' en el Excel. Verific\u00e1 que la columna de concesionario coincida.'); input.value=''; return; }
+      const cumpl = aprob>0 ? Math.round(fact/aprob*100) : 0;
+      const efect = total>0 ? Math.round(aprob/total*100) : 0;
+      accountStatus[_acctDealer] = { code:_acctDealer, dealerName:caseDealerName(_acctDealer), total:total,aprob:aprob,rech:rech,pend:pend,fact:fact,sinFact:sinFact,cumpl:cumpl,efect:efect, byType:byType, updatedAt:new Date().toISOString(), fileName:file.name };
+      save(STORAGE.accountStatus, accountStatus);
+      input.value='';
+      renderAccountStatus();
+      alert('Estado de cuenta actualizado para '+caseDealerName(_acctDealer)+': '+total+' reclamos analizados.');
+    }catch(err){ alert('Error al leer el Excel: '+err.message); input.value=''; }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function renderAccountStatus(){
+  const c = document.getElementById('cuenta-container'); if(!c) return;
+  let h = '<div style="margin-bottom:18px;max-width:460px;"><label style="font-size:12px;color:var(--text-secondary);font-weight:600;display:block;margin-bottom:5px;">Concesionario</label>';
+  h += '<select id="acct-dealer" onchange="_acctDealer=this.value;renderAccountStatus()" style="width:100%;">';
+  h += '<option value="">— eleg\u00ed un concesionario —</option>';
+  DEALERS.slice().sort(function(a,b){return String(a.n).localeCompare(String(b.n));}).forEach(function(d){ h += '<option value="'+esc(d.code)+'"'+(d.code===_acctDealer?' selected':'')+'>'+esc(d.n)+' ('+esc(d.code)+')</option>'; });
+  h += '</select></div>';
+  if(!_acctDealer){ h += emptyState('Eleg\u00ed un concesionario','Seleccion\u00e1 uno y sub\u00ed su Excel de reclamos para ver el estado de cuenta'); c.innerHTML=h; return; }
+  const data = accountStatus[_acctDealer];
+  if(!data){ h += emptyState('Sin datos para '+esc(caseDealerName(_acctDealer)),'Sub\u00ed el Excel de reclamos con "\u2191 Subir Excel"'); c.innerHTML=h; return; }
+  h += renderAccountPanel(data);
+  c.innerHTML = h;
+}
+function renderAccountPanel(d){
+  function kpi(icon,label,val,color,sub){ return '<div style="flex:1;min-width:140px;border:1px solid var(--border);border-radius:12px;padding:14px 16px;background:#fff;position:relative;overflow:hidden;"><div style="position:absolute;top:0;left:0;width:100%;height:3px;background:'+color+';"></div><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="width:30px;height:30px;border-radius:8px;background:'+color+'22;display:inline-flex;align-items:center;justify-content:center;font-size:15px;">'+icon+'</span><span style="font-size:11.5px;color:var(--text-secondary);font-weight:600;">'+label+'</span></div><div style="font-size:27px;font-weight:800;line-height:1;">'+val+'</div>'+(sub?'<div style="font-size:10.5px;color:var(--text-muted);margin-top:3px;">'+sub+'</div>':'')+'</div>'; }
+  function gauge(label,pct,color,sub){ return '<div style="flex:1;min-width:210px;border:1px solid var(--border);border-radius:12px;padding:16px 18px;background:#fff;"><div style="font-size:12px;color:var(--text-secondary);font-weight:600;margin-bottom:8px;">'+label+'</div><div style="display:flex;align-items:flex-end;gap:10px;"><div style="font-size:34px;font-weight:800;line-height:1;color:'+color+';">'+pct+'%</div><div style="font-size:11px;color:var(--text-muted);padding-bottom:5px;">'+sub+'</div></div><div class="progress" style="margin-top:10px;height:9px;"><div class="progress-bar" style="width:'+pct+'%;background:'+color+';"></div></div></div>'; }
+  const dt=d.updatedAt?new Date(d.updatedAt):null;
+  let h='<div style="margin-bottom:14px;"><div style="font-size:18px;font-weight:800;">'+esc(d.dealerName||d.code)+'</div><div style="font-size:11.5px;color:var(--text-muted);">'+esc(d.code)+(dt?' \u00b7 actualizado '+dt.toLocaleDateString('es-AR')+' '+dt.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}):'')+(d.fileName?' \u00b7 '+esc(d.fileName):'')+'</div></div>';
+  h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;">';
+  h+=kpi('\uD83D\uDCCB','Reclamos',d.total,'#16181D','total');
+  h+=kpi('\u2705','Aprobados',d.aprob,'#047857','');
+  h+=kpi('\u274C','Rechazados',d.rech,'#E4002B','');
+  h+=kpi('\uD83E\uDDFE','Facturados',d.fact,'#059669','de aprobados');
+  h+=kpi('\uD83D\uDCED','Sin facturar',d.sinFact,'#D97706','aprob. pendientes');
+  h+='</div>';
+  h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">';
+  h+=gauge('% de cumplimiento',d.cumpl,'#059669','facturados / aprobados');
+  h+=gauge('% de efectividad',d.efect,'#1E40AF','aprobados / total');
+  h+='</div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-bottom:16px;">';
+  const estData=[{label:'Aprobados',color:'#047857',val:d.aprob},{label:'Rechazados',color:'#E4002B',val:d.rech},{label:'En proceso',color:'#9AA0A8',val:d.pend}];
+  h+='<div class="card"><div class="card-h"><div class="card-title">Distribuci\u00f3n de reclamos</div></div><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;"><div style="position:relative;width:130px;height:130px;flex-shrink:0;">'+svgDonut(estData,130,22)+'<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;"><span style="font-size:26px;font-weight:800;">'+d.total+'</span><span style="font-size:9px;color:var(--text-muted);text-transform:uppercase;">reclamos</span></div></div><div style="flex:1;min-width:130px;">';
+  estData.forEach(function(x){ const pct=d.total?Math.round(x.val/d.total*100):0; h+='<div style="display:flex;align-items:center;gap:7px;margin-bottom:7px;"><span style="width:11px;height:11px;border-radius:3px;background:'+x.color+';flex-shrink:0;"></span><span style="font-size:12px;flex:1;">'+x.label+'</span><span style="font-size:12px;font-weight:700;">'+x.val+'</span><span style="font-size:10.5px;color:var(--text-muted);width:36px;text-align:right;">'+pct+'%</span></div>'; });
+  h+='</div></div></div>';
+  h+='<div class="card"><div class="card-h"><div class="card-title">Facturaci\u00f3n de aprobados</div></div>';
+  function fbar(lbl,val,col){ const pct=d.aprob?Math.round(val/d.aprob*100):0; return '<div style="margin-bottom:11px;"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;"><span><b>'+lbl+'</b></span><span><b>'+val+'</b> \u00b7 '+pct+'%</span></div><div style="height:15px;background:#F1F2F4;border-radius:8px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:8px;"></div></div></div>'; }
+  h+=fbar('Facturados',d.fact,'#059669')+fbar('Sin facturar',d.sinFact,'#D97706');
+  h+='</div></div>';
+  const types=Object.keys(d.byType||{});
+  if(types.length){
+    const tdata=types.map(function(t,i){ return {label:t, val:d.byType[t], color:KPI_PALETTE[i%KPI_PALETTE.length]}; });
+    h+='<div class="card" style="margin-bottom:16px;"><div class="card-h"><div class="card-title">Reclamos por tipo</div></div>'+svgVBars(tdata,600,160,'#1E40AF')+'</div>';
+  }
+  return h;
+}
 const CASE_STAGES = [
   {v:0,   label:'Sin relevar',  desc:'Caso recién cargado, aún sin relevar.'},
   {v:25,  label:'Relevado',     desc:'El caso se encuentra relevado.'},
